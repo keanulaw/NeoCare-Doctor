@@ -136,7 +136,8 @@ const Register = () => {
 
       const consultantRef = doc(db, "consultants", user.uid);
       await setDoc(consultantRef, {
-        id: consultantRef.id,
+        id: user.uid, // Use the Firebase Auth UID as the document ID
+        userId: user.uid, // Add this field to store the doctor's auth UID
         email,
         username,
         name,

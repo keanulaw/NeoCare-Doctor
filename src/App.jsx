@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -12,9 +12,20 @@ import Forum from "./screens/Forum";
 import Login from "./screens/Login";
 import Register from "./screens/Register";
 import Requests from "./screens/Requests";
+import ChatPage from "./screens/ChatPage";
 import ChatComponent from "./components/ChatComponent";
+import { auth } from "./configs/firebase-config";
 
 function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user);
+    });
+    return unsubscribe;
+  }, []);
+
   return (
     <Router>
       <Routes>
@@ -24,7 +35,8 @@ function App() {
         <Route path="/forum" element={<Forum />} />
         <Route path="/register" element={<Register />} />
         <Route path="/requests" element={<Requests />} />
-        <Route path="/chat/:consultantId" element={<ChatComponent />} />
+        <Route path="/chat" element={currentUser ? <ChatPage /> : <Navigate to="/" replace />} />
+        <Route path="/chat/:chatId" element={currentUser ? <ChatComponent /> : <Navigate to="/" replace />} />
       </Routes>
     </Router>
   );

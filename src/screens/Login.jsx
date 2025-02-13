@@ -13,10 +13,14 @@ const Login = () => {
 
   const login = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate("/landing");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      if (userCredential.user) {
+        console.log("Successfully logged in:", userCredential.user.uid);
+        navigate("/landing");
+      }
     } catch (error) {
       console.error("Error signing in:", error);
+      alert("Login failed: " + error.message);
     }
   };
 
@@ -46,11 +50,11 @@ const Login = () => {
       </div>
 
       <div className="w-[600px] h-auto p-8 flex gap-2 flex-col">
-        <label>Username</label>
+        <label>Email</label>
         <input
           className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
-          placeholder="Enter Username"
-          type="text"
+          placeholder="Enter Email"
+          type="email"
           onChange={(e) => setEmail(e.target.value)}
         />
         <label>Password</label>
