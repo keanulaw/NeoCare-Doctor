@@ -2,40 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 import Logo from "../assets/Logo.png";
 
-<div className="w-auto overflow-y-auto">
-  {/*Header*/}
-  <div className="absolute hidden w-[950px] h-20 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl md:transform md:translate-x-1/2 top-6 justify-center items-center md:flex">
-    <div className="flex ms-14 items-center justify-center">
-      <img src={Logo} alt="React logo" width="50" height="50" />
-      <label className="font-medium text-3xl font-mono">NeoCare</label>
-    </div>
-    <div className="w-full gap-12 flex px-20">
-      <Link className="font-medium text-xl font-mono" to="/dashboard">
-        Dashboard
-      </Link>
-      <Link className="font-medium text-xl font-mono" to="/clients">
-        Clients
-      </Link>
-      <Link className="font-medium text-xl font-mono" to="/requests">
-        Requests
-      </Link>
-      <Link className="font-medium text-xl font-mono" to="/forum">
-        Forum
-      </Link>
-      <Link className="font-medium text-xl font-mono" to="/profile">
-        Profile
-      </Link>
-    </div>
-  </div>
-
-  <div className="absolute flex md:hidden flex-col gap-1 top-4 left-4">
-    <div className="w-10 border-2 border-black"></div>
-    <div className="w-10 border-2 border-black"></div>
-    <div className="w-10 border-2 border-black"></div>
-    <div className="w-10 border-2 border-black"></div>
-  </div>
-</div>;
-
 const Dashboard = () => {
   return (
     <div className="w-auto overflow-y-auto relative">
@@ -43,7 +9,9 @@ const Dashboard = () => {
       <div className="absolute hidden w-[950px] h-20 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl md:transform md:translate-x-1/2 top-6 justify-center items-center md:flex">
         <div className="flex ms-14 items-center justify-center">
           <img src={Logo} alt="React logo" width="50" height="50" />
-          <label className="font-medium text-3xl font-mono">NeoCare</label>
+          <Link to="/landing" className="font-medium text-3xl font-mono">
+            NeoCare
+          </Link>
         </div>
         <div className="w-full gap-12 flex px-20">
           <Link className="font-medium text-xl font-mono" to="/dashboard">
@@ -71,7 +39,7 @@ const Dashboard = () => {
         <div className="w-10 border-2 border-black"></div>
       </div>
 
-      {/*First Layer*/}
+      {/*Dashboard Layer*/}
       <div className="w-full h-auto pt-80 pb-20 flex flex-col overflow-y-auto justify-center items-center gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4]">
         <div className="flex flex-col justify-center items-center gap-3">
           <label className="font-bold text-6xl"> Dashboard Overview </label>

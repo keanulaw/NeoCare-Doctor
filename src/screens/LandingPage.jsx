@@ -11,7 +11,9 @@ const LandingPage = () => {
       <div className="absolute hidden w-[950px] h-20 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl md:transform md:translate-x-1/2 top-6 justify-center items-center md:flex">
         <div className="flex ms-14 items-center justify-center">
           <img src={Logo} alt="React logo" width="50" height="50" />
-          <label className="font-medium text-3xl font-mono">NeoCare</label>
+          <Link to="/landing" className="font-medium text-3xl font-mono">
+            NeoCare
+          </Link>
         </div>
         <div className="w-full gap-12 flex px-20">
           <Link className="font-medium text-xl font-mono" to="/dashboard">
