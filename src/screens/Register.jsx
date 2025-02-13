@@ -129,8 +129,9 @@ const Register = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Store additional data in Firestore
-      await setDoc(doc(db, "consultants", user.uid), {
+      const consultantRef = doc(db, "consultants", user.uid);
+      await setDoc(consultantRef, {
+        id: consultantRef.id,
         email,
         username,
         name,
