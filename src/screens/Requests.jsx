@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db, auth } from "../configs/firebase-config";
 import { collection, doc, getDocs, updateDoc, addDoc, getDoc } from "firebase/firestore";
 import Header from "../components/Header";
-import { useNavigate } from "react-router-dom"; // Use useNavigate for navigation
+import { useNavigate } from "react-router-dom";
 
 // Function to generate a consistent conversation ID
 const generateConversationId = (userId, consultantId) => {
@@ -11,12 +11,19 @@ const generateConversationId = (userId, consultantId) => {
 
 const Requests = () => {
   const [requests, setRequests] = useState([]);
-  const navigate = useNavigate(); // Initialize useNavigate
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchRequests = async () => {
       const querySnapshot = await getDocs(collection(db, "appointmentRequests"));
-      const requestsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const requestsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return { 
+          id: doc.id,
+          ...data,
+          date: data.date?.toDate() // Convert Firestore timestamp to Date
+        };
+      });
       setRequests(requestsData);
     };
 
@@ -37,9 +44,18 @@ const Requests = () => {
     }
   };
 
-  const handleChat = (consultantId) => {
-    const conversationId = generateConversationId(auth.currentUser.uid, consultantId);
+  const handleChat = (request) => {
+    const conversationId = generateConversationId(request.userId, request.consultantId);
     navigate(`/chat/${conversationId}`);
+  };
+
+  const formatDate = (date) => {
+    return date?.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   return (
@@ -53,7 +69,13 @@ const Requests = () => {
         <div className="bg-white shadow-md rounded-lg p-4 w-full">
           {requests.map((request) => (
             <div key={request.id} className="flex justify-between items-center border-b py-4">
-              <span className="font-bold">{request.fullName}</span>
+              <div className="flex flex-col">
+                <span className="font-bold">{request.userName}</span>
+                <span className="text-sm text-gray-600">
+                  {formatDate(request.date)} at {request.time}
+                </span>
+                <span className="text-sm">Status: {request.status}</span>
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => acceptAppointment(request.id)}
@@ -65,7 +87,7 @@ const Requests = () => {
                   Decline
                 </button>
                 <button
-                  onClick={() => handleChat(request.id)}
+                  onClick={() => handleChat(request)}
                   className="bg-blue-500 text-white px-4 py-2 rounded"
                 >
                   Chat
