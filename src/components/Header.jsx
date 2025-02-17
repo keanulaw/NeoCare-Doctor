@@ -14,9 +14,9 @@ const Header = () => {
 
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-[1200px] h-20 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl flex justify-center items-center">
-      <div className="flex items-center justify-center">
+      <Link to="/landing" className="flex items-center justify-center">
         <img src={Logo} alt="React logo" width="50" height="50" />
-      </div>
+      </Link>
       <div className="w-full gap-12 flex px-20 justify-center">
         <Link className="font-medium text-xl font-mono" to="/dashboard">
           Dashboard
