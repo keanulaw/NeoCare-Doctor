@@ -19,6 +19,7 @@ const center = {
 const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
@@ -42,24 +43,21 @@ const Register = () => {
       return;
     }
 
-    // Initialize services
     const geocoder = new window.google.maps.Geocoder();
     const placesService = new window.google.maps.places.PlacesService(
-      document.createElement("div") // A dummy DOM element for the PlacesService
+      document.createElement("div")
     );
 
     try {
-      // 1. Get the formatted address (fallback if no hospital is found)
       const geocodeResponse = await geocoder.geocode({ location: latLng });
       const formattedAddress =
         geocodeResponse.results[0]?.formatted_address || "";
 
-      // 2. Search for hospitals near the clicked location
       const placesResponse = await new Promise((resolve, reject) => {
         placesService.nearbySearch(
           {
             location: latLng,
-            radius: 100, // Search within 100 meters
+            radius: 100,
             type: "hospital",
           },
           (results, status) => {
@@ -72,12 +70,11 @@ const Register = () => {
         );
       });
 
-      // 3. Set the hospital name (or fallback to the address)
       if (placesResponse.length > 0) {
         const hospitalName = placesResponse[0].name;
         setHospitalAddress(hospitalName);
       } else {
-        setHospitalAddress(formattedAddress); // Fallback to address
+        setHospitalAddress(formattedAddress);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -107,8 +104,13 @@ const Register = () => {
     console.log("Contact Info:", contactInfo);
     console.log("Hospital Location:", hospitalLocation);
     console.log("Hospital Address:", hospitalAddress);
+    console.log("Confirm Password:", confirmPassword);
 
-    // Input Validation
+    if (password !== confirmPassword) {
+      alert("Passwords do not match.");
+      return;
+    }
+
     if (
       !email ||
       !password ||
@@ -136,8 +138,7 @@ const Register = () => {
 
       const consultantRef = doc(db, "consultants", user.uid);
       await setDoc(consultantRef, {
-        id: user.uid, // Use the Firebase Auth UID as the document ID
-        userId: user.uid, // Add this field to store the doctor's auth UID
+        userId: user.uid, // Add userId field
         email,
         username,
         name,
@@ -161,7 +162,6 @@ const Register = () => {
 
   return (
     <div className="w-full h-auto overflow-y py-25 px-8 flex flex-col  gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
-      {/* Header */}
       <div className="w-full h-auto flex justify-center items-center">
         <div className="w-[300px] h-15 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl justify-center items-center flex">
           <div className="flex items-center justify-center">
@@ -208,6 +208,13 @@ const Register = () => {
             type="password"
             onChange={(e) => setPassword(e.target.value)}
           />
+          <label>Confirm Password</label>
+          <input
+            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            placeholder="Confirm Password"
+            type="password"
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
           <label>Specialty</label>
           <input
             className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
@@ -216,7 +223,6 @@ const Register = () => {
             onChange={(e) => setSpecialty(e.target.value)}
           />
 
-          {/* Appointment Details */}
           <label>Available Days</label>
           <input
             className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
@@ -263,7 +269,6 @@ const Register = () => {
 
         <div className="w-1/2 flex items-center justify-center">
           <div className="w-full">
-            {/* Map for selecting hospital location */}
             <label>Hospital Location</label>
             {isLoaded ? (
               <GoogleMap
@@ -291,7 +296,7 @@ const Register = () => {
               placeholder="Hospital Name (auto-filled)"
               value={hospitalAddress}
               onChange={(e) => setHospitalAddress(e.target.value)}
-              readOnly // Optional: Prevent manual edits if you want
+              readOnly
             />
           </div>
         </div>
