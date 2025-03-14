@@ -16,6 +16,29 @@ const center = {
   lng: -122.4194, // Default longitude
 };
 
+// Common choices for the checkboxes
+const availableDaysOptions = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+const consultationHoursOptions = [
+  "8:00 AM to 9:00 AM",
+  "9:00 AM to 10:00 AM",
+  "10:00 AM to 11:00 AM",
+  "11:00 AM to 12:00 PM",
+  "12:00 PM to 1:00 PM",
+  "1:00 PM to 2:00 PM",
+  "2:00 PM to 3:00 PM",
+  "3:00 PM to 4:00 PM",
+  "4:00 PM to 5:00 PM",
+];
+const platformOptions = ["In-person", "Online"];
+
 const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,9 +49,10 @@ const Register = () => {
   const [specialty, setSpecialty] = useState("");
   const [hospitalLocation, setHospitalLocation] = useState(null);
   const [hospitalAddress, setHospitalAddress] = useState("");
-  const [availableDays, setAvailableDays] = useState("");
-  const [consultationHours, setConsultationHours] = useState("");
-  const [platform, setPlatform] = useState("");
+  // Change these states to arrays for checkboxes
+  const [availableDays, setAvailableDays] = useState([]);
+  const [consultationHours, setConsultationHours] = useState([]);
+  const [platform, setPlatform] = useState([]);
   const [contactInfo, setContactInfo] = useState("");
   const navigate = useNavigate();
 
@@ -92,6 +116,15 @@ const Register = () => {
     console.log("Hospital Location Set:", latLng);
   };
 
+  // Toggle function for checkboxes
+  const toggleCheckbox = (value, currentArray, setArray) => {
+    if (currentArray.includes(value)) {
+      setArray(currentArray.filter((item) => item !== value));
+    } else {
+      setArray([...currentArray, value]);
+    }
+  };
+
   const register = async () => {
     console.log("Email:", email);
     console.log("Password:", password);
@@ -117,9 +150,9 @@ const Register = () => {
       !username ||
       !name ||
       !specialty ||
-      !availableDays ||
-      !consultationHours ||
-      !platform ||
+      availableDays.length === 0 ||
+      consultationHours.length === 0 ||
+      platform.length === 0 ||
       !contactInfo ||
       !hospitalLocation ||
       !hospitalAddress
@@ -161,103 +194,132 @@ const Register = () => {
   };
 
   return (
-    <div className="w-full h-auto overflow-y py-25 px-8 flex flex-col  gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
+    <div className="w-full h-auto overflow-y py-25 px-8 flex flex-col gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
       <div className="w-full h-auto flex justify-center items-center">
-        <div className="w-[300px] h-15 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl justify-center items-center flex">
+        <div className="w-[300px] h-15 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl flex justify-center items-center">
           <div className="flex items-center justify-center">
             <img src={Logo} alt="React logo" width="50" height="50" />
-            <label className="font-medium text-3xl font-mono">NeoCare</label>
+            <label className="font-medium text-3xl font-mono ml-2">NeoCare</label>
           </div>
         </div>
       </div>
 
       <div className="w-full flex flex-row gap-2">
-        <div className="w-1/2 h-auto p-8 flex gap-2 flex-col">
+        {/* Left Side - Form Fields */}
+        <div className="w-1/2 h-auto p-8 flex flex-col gap-4">
           <label>Email</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter Email"
-            type="Email"
+            type="email"
             onChange={(e) => setEmail(e.target.value)}
           />
           <label>Username</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter Username"
             type="text"
             onChange={(e) => setUsername(e.target.value)}
           />
           <label>Name</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter Name"
             type="text"
             onChange={(e) => setName(e.target.value)}
           />
           <label>Photo URL</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter Photo URL"
             type="text"
             onChange={(e) => setPhotoUrl(e.target.value)}
           />
           <label>Password</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter Password"
             type="password"
             onChange={(e) => setPassword(e.target.value)}
           />
           <label>Confirm Password</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Confirm Password"
             type="password"
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
           <label>Specialty</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter your Specialty"
             type="text"
             onChange={(e) => setSpecialty(e.target.value)}
           />
 
+          {/* Available Days Checkboxes */}
           <label>Available Days</label>
-          <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
-            placeholder="e.g., Monday to Friday"
-            type="text"
-            onChange={(e) => setAvailableDays(e.target.value)}
-          />
+          <div className="flex flex-wrap gap-4">
+            {availableDaysOptions.map((day) => (
+              <label key={day} className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[#6bc4c1]"
+                  checked={availableDays.includes(day)}
+                  onChange={() => toggleCheckbox(day, availableDays, setAvailableDays)}
+                />
+                <span>{day}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Consultation Hours Checkboxes */}
           <label>Consultation Hours</label>
-          <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
-            placeholder="e.g., 9:00 AM to 5:00 PM"
-            type="text"
-            onChange={(e) => setConsultationHours(e.target.value)}
-          />
-          <label>Platform (In-person/Online)</label>
-          <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
-            placeholder="e.g., In-person, Online, or Both"
-            type="text"
-            onChange={(e) => setPlatform(e.target.value)}
-          />
+          <div className="flex flex-wrap gap-4">
+            {consultationHoursOptions.map((hour) => (
+              <label key={hour} className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[#6bc4c1]"
+                  checked={consultationHours.includes(hour)}
+                  onChange={() => toggleCheckbox(hour, consultationHours, setConsultationHours)}
+                />
+                <span>{hour}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Platform Checkboxes */}
+          <label>Platform</label>
+          <div className="flex flex-wrap gap-4">
+            {platformOptions.map((option) => (
+              <label key={option} className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[#6bc4c1]"
+                  checked={platform.includes(option)}
+                  onChange={() => toggleCheckbox(option, platform, setPlatform)}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
+          </div>
+
           <label>Contact Information (Phone Number)</label>
           <input
-            className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
+            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             placeholder="Enter Phone Number"
             type="text"
             onChange={(e) => setContactInfo(e.target.value)}
           />
+
           <button
             onClick={register}
             className="w-full h-10 rounded-xl bg-[#6bc4c1] text-white font-medium text-xl mt-5 font-mono cursor-pointer duration-300 hover:bg-[#48817f]"
           >
             SIGN UP
           </button>
-          <div className="flex-col flex justify-center items-center gap-5">
+          <div className="flex flex-col justify-center items-center gap-5">
             <label>
               Already have an Account?{" "}
               <Link to="/" className="underline">
@@ -267,6 +329,7 @@ const Register = () => {
           </div>
         </div>
 
+        {/* Right Side - Map */}
         <div className="w-1/2 flex items-center justify-center">
           <div className="w-full">
             <label>Hospital Location</label>
@@ -285,8 +348,7 @@ const Register = () => {
 
             {hospitalLocation && (
               <p>
-                Selected Location: Latitude: {hospitalLocation.lat}, Longitude:{" "}
-                {hospitalLocation.lng}
+                Selected Location: Latitude: {hospitalLocation.lat}, Longitude: {hospitalLocation.lng}
               </p>
             )}
             {hospitalAddress && <p>Hospital Address: {hospitalAddress}</p>}
@@ -297,6 +359,7 @@ const Register = () => {
               value={hospitalAddress}
               onChange={(e) => setHospitalAddress(e.target.value)}
               readOnly
+              className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
             />
           </div>
         </div>

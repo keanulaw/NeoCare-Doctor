@@ -20,10 +20,10 @@ const Requests = () => {
       try {
         const q = query(collection(db, "appointmentRequests"), where("consultantId", "==", currentUser.uid));
         const querySnapshot = await getDocs(q);
-        const requestsData = querySnapshot.docs.map(doc => {
-          const data = doc.data();
+        const requestsData = querySnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
           return { 
-            id: doc.id,
+            id: docSnapshot.id,
             ...data,
             date: data.date?.toDate() // Convert Firestore timestamp to Date
           };
@@ -50,17 +50,22 @@ const Requests = () => {
       const requestDoc = await getDoc(requestRef);
       if (requestDoc.exists()) {
         const requestData = requestDoc.data();
-        // Add consultantId to client data
+        // Generate a conversation ID using client and consultant IDs
+        const conversationId = generateConversationId(requestData.userId, currentUser.uid);
+        // Create a client document for the accepted appointment
         await addDoc(collection(db, "clients"), {
           ...requestData,
           consultantId: currentUser.uid,
-          acceptedAt: new Date()
+          acceptedAt: new Date(),
+          conversationId,
         });
 
-        // Remove the accepted request from the local state
+        // Remove the accepted request from local state
         setRequests(prevRequests => prevRequests.filter(request => request.id !== requestId));
 
         alert("Appointment accepted successfully!");
+        // Navigate to the Clients page
+        navigate("/clients");
       }
     } catch (error) {
       console.error("Error accepting appointment: ", error);

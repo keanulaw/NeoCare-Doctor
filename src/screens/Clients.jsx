@@ -75,10 +75,10 @@ const Clients = () => {
                     View
                   </button>
                   <button
-                    onClick={() => navigate(`/clients/edit/${client.id}`)}
+                    onClick={() => navigate(`/clients/add-consultation-note/${client.id}`)}
                     className="border border-blue-500 text-blue-500 px-4 py-2 rounded"
                   >
-                    Edit
+                    Add Consultation Note
                   </button>
                 </div>
               </div>
