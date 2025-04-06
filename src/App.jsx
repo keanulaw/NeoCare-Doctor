@@ -17,6 +17,7 @@ import ChatComponent from "./components/ChatComponent";
 import { auth } from "./configs/firebase-config";
 import Clients from "./screens/Clients";
 import AddConsultationNote from "./screens/AddConsultationNote";
+import ClientDetails from "./screens/ClientDetails";
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -41,6 +42,7 @@ function App() {
         <Route path="/chat/:chatId" element={currentUser ? <ChatComponent /> : <Navigate to="/" replace />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/clients/add-consultation-note/:id" element={<AddConsultationNote />} />
+        <Route path="/clients/:id" element={<ClientDetails />} />
       </Routes>
     </Router>
   );

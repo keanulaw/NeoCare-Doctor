@@ -5,18 +5,19 @@ import { auth, db } from "../configs/firebase-config";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { GoogleMap, Marker, useLoadScript } from "@react-google-maps/api";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const mapContainerStyle = {
   width: "100%",
   height: "500px",
 };
 
+// Set default center to Cebu, Philippines
 const center = {
-  lat: 37.7749, // Default latitude
-  lng: -122.4194, // Default longitude
+  lat: 10.3157,
+  lng: 123.8854,
 };
 
-// Common choices for the checkboxes
 const availableDaysOptions = [
   "Monday",
   "Tuesday",
@@ -26,6 +27,7 @@ const availableDaysOptions = [
   "Saturday",
   "Sunday",
 ];
+
 const consultationHoursOptions = [
   "8:00 AM to 9:00 AM",
   "9:00 AM to 10:00 AM",
@@ -37,6 +39,7 @@ const consultationHoursOptions = [
   "3:00 PM to 4:00 PM",
   "4:00 PM to 5:00 PM",
 ];
+
 const platformOptions = ["In-person", "Online"];
 
 const Register = () => {
@@ -45,45 +48,40 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
+  // We'll store the URL here if the user provides one or uploads a file.
   const [photoUrl, setPhotoUrl] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [hospitalLocation, setHospitalLocation] = useState(null);
   const [hospitalAddress, setHospitalAddress] = useState("");
-  // Change these states to arrays for checkboxes
   const [availableDays, setAvailableDays] = useState([]);
   const [consultationHours, setConsultationHours] = useState([]);
   const [platform, setPlatform] = useState([]);
   const [contactInfo, setContactInfo] = useState("");
+  // New state for the uploaded file
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const navigate = useNavigate();
 
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: "AIzaSyBcJDGxtpPyKTJaH8VsPdWq3RkohUNkfd4", // Replace with your API key
-    libraries: ["places"], // Load the Places library
+    libraries: ["places"],
   });
 
+  const storage = getStorage();
+
+  // Geocode the clicked location and search for a nearby hospital
   const geocodeLatLng = async (latLng) => {
     if (!window.google || !window.google.maps) {
       console.error("Google Maps API not loaded");
       return;
     }
-
     const geocoder = new window.google.maps.Geocoder();
-    const placesService = new window.google.maps.places.PlacesService(
-      document.createElement("div")
-    );
-
+    const placesService = new window.google.maps.places.PlacesService(document.createElement("div"));
     try {
       const geocodeResponse = await geocoder.geocode({ location: latLng });
-      const formattedAddress =
-        geocodeResponse.results[0]?.formatted_address || "";
-
+      const formattedAddress = geocodeResponse.results[0]?.formatted_address || "";
       const placesResponse = await new Promise((resolve, reject) => {
         placesService.nearbySearch(
-          {
-            location: latLng,
-            radius: 100,
-            type: "hospital",
-          },
+          { location: latLng, radius: 100, type: "hospital" },
           (results, status) => {
             if (status === window.google.maps.places.PlacesServiceStatus.OK) {
               resolve(results);
@@ -93,7 +91,6 @@ const Register = () => {
           }
         );
       });
-
       if (placesResponse.length > 0) {
         const hospitalName = placesResponse[0].name;
         setHospitalAddress(hospitalName);
@@ -116,12 +113,18 @@ const Register = () => {
     console.log("Hospital Location Set:", latLng);
   };
 
-  // Toggle function for checkboxes
   const toggleCheckbox = (value, currentArray, setArray) => {
     if (currentArray.includes(value)) {
       setArray(currentArray.filter((item) => item !== value));
     } else {
       setArray([...currentArray, value]);
+    }
+  };
+
+  // Handler for file input change
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setProfilePhotoFile(e.target.files[0]);
     }
   };
 
@@ -138,12 +141,12 @@ const Register = () => {
     console.log("Hospital Location:", hospitalLocation);
     console.log("Hospital Address:", hospitalAddress);
     console.log("Confirm Password:", confirmPassword);
+    console.log("Profile Photo File:", profilePhotoFile);
 
     if (password !== confirmPassword) {
       alert("Passwords do not match.");
       return;
     }
-
     if (
       !email ||
       !password ||
@@ -162,20 +165,23 @@ const Register = () => {
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      const consultantRef = doc(db, "consultants", user.uid);
-      await setDoc(consultantRef, {
-        userId: user.uid, // Add userId field
+      // If a file was uploaded, upload it to Firebase Storage and get the URL.
+      let uploadedPhotoUrl = "";
+      if (profilePhotoFile) {
+        const storageRef = ref(storage, `profilePhotos/${user.uid}`);
+        const snapshot = await uploadBytes(storageRef, profilePhotoFile);
+        uploadedPhotoUrl = await getDownloadURL(snapshot.ref);
+      }
+      // Save the consultant data with the uploaded photo URL (or blank if not provided)
+      await setDoc(doc(db, "consultants", user.uid), {
+        userId: user.uid,
         email,
         username,
         name,
-        photoUrl,
+        photoUrl: uploadedPhotoUrl, // Blank if no file was uploaded
         specialty,
         hospitalLocation,
         hospitalAddress,
@@ -194,7 +200,7 @@ const Register = () => {
   };
 
   return (
-    <div className="w-full h-auto overflow-y py-25 px-8 flex flex-col gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
+    <div className="w-full h-auto overflow-y-auto py-25 px-8 flex flex-col gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
       <div className="w-full h-auto flex justify-center items-center">
         <div className="w-[300px] h-15 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl flex justify-center items-center">
           <div className="flex items-center justify-center">
@@ -203,7 +209,6 @@ const Register = () => {
           </div>
         </div>
       </div>
-
       <div className="w-full flex flex-row gap-2">
         {/* Left Side - Form Fields */}
         <div className="w-1/2 h-auto p-8 flex flex-col gap-4">
@@ -228,12 +233,18 @@ const Register = () => {
             type="text"
             onChange={(e) => setName(e.target.value)}
           />
-          <label>Photo URL</label>
+          <label>Photo URL (optional)</label>
           <input
             className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Photo URL"
+            placeholder="Enter Photo URL or leave blank"
             type="text"
             onChange={(e) => setPhotoUrl(e.target.value)}
+          />
+          <label>Or Upload Profile Photo</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
           />
           <label>Password</label>
           <input
@@ -256,7 +267,6 @@ const Register = () => {
             type="text"
             onChange={(e) => setSpecialty(e.target.value)}
           />
-
           {/* Available Days Checkboxes */}
           <label>Available Days</label>
           <div className="flex flex-wrap gap-4">
@@ -272,7 +282,6 @@ const Register = () => {
               </label>
             ))}
           </div>
-
           {/* Consultation Hours Checkboxes */}
           <label>Consultation Hours</label>
           <div className="flex flex-wrap gap-4">
@@ -288,7 +297,6 @@ const Register = () => {
               </label>
             ))}
           </div>
-
           {/* Platform Checkboxes */}
           <label>Platform</label>
           <div className="flex flex-wrap gap-4">
@@ -304,7 +312,6 @@ const Register = () => {
               </label>
             ))}
           </div>
-
           <label>Contact Information (Phone Number)</label>
           <input
             className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
@@ -312,8 +319,8 @@ const Register = () => {
             type="text"
             onChange={(e) => setContactInfo(e.target.value)}
           />
-
           <button
+            type="button"
             onClick={register}
             className="w-full h-10 rounded-xl bg-[#6bc4c1] text-white font-medium text-xl mt-5 font-mono cursor-pointer duration-300 hover:bg-[#48817f]"
           >
@@ -328,7 +335,6 @@ const Register = () => {
             </label>
           </div>
         </div>
-
         {/* Right Side - Map */}
         <div className="w-1/2 flex items-center justify-center">
           <div className="w-full">
@@ -345,14 +351,12 @@ const Register = () => {
             ) : (
               <p>Loading map...</p>
             )}
-
             {hospitalLocation && (
               <p>
                 Selected Location: Latitude: {hospitalLocation.lat}, Longitude: {hospitalLocation.lng}
               </p>
             )}
             {hospitalAddress && <p>Hospital Address: {hospitalAddress}</p>}
-
             <input
               type="text"
               placeholder="Hospital Name (auto-filled)"

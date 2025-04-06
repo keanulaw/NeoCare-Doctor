@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import Header from "../components/Header";
 import { useParams, useNavigate } from "react-router-dom";
-import { db } from "../configs/firebase-config";
-import { addDoc, collection } from "firebase/firestore";
+import { db, auth } from "../configs/firebase-config";
+import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 
 const AddConsultationNote = () => {
   const { id } = useParams();
@@ -41,15 +41,40 @@ const AddConsultationNote = () => {
 
   const handleAddNote = async () => {
     setLoading(true);
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+      alert("Please sign in to save notes");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Validate client document exists
+      const clientDocRef = doc(db, "clients", id);
+      const clientDoc = await getDoc(clientDocRef);
+
+      if (!clientDoc.exists()) {
+        throw new Error("Client document not found");
+      }
+
+      // Verify consultant relationship
+      if (clientDoc.data().consultantId !== currentUser.uid) {
+        throw new Error("You are not assigned to this client");
+      }
+
+      // Create the note with proper references
       await addDoc(collection(db, "consultationNotes"), {
         clientId: id,
+        consultantId: currentUser.uid,  // Explicitly store consultant ID
         ...formData,
-        createdAt: new Date(),
+        createdAt: serverTimestamp(),  // Use server-side timestamp for accuracy
       });
+
       navigate(`/clients/${id}`);
     } catch (error) {
-      console.error("Error adding consultation note:", error);
+      console.error("Error adding note:", error);
+      alert(`Save failed: ${error.message}`);
     }
     setLoading(false);
   };
