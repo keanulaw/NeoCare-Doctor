@@ -9,10 +9,9 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const mapContainerStyle = {
   width: "100%",
-  height: "500px",
+  height: "300px",
 };
 
-// Set default center to Cebu, Philippines
 const center = {
   lat: 10.3157,
   lng: 123.8854,
@@ -46,10 +45,7 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [username, setUsername] = useState("");
   const [name, setName] = useState("");
-  // We'll store the URL here if the user provides one or uploads a file.
-  const [photoUrl, setPhotoUrl] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [hospitalLocation, setHospitalLocation] = useState(null);
   const [hospitalAddress, setHospitalAddress] = useState("");
@@ -57,8 +53,8 @@ const Register = () => {
   const [consultationHours, setConsultationHours] = useState([]);
   const [platform, setPlatform] = useState([]);
   const [contactInfo, setContactInfo] = useState("");
-  // New state for the uploaded file
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
   const navigate = useNavigate();
 
   const { isLoaded } = useLoadScript({
@@ -68,7 +64,7 @@ const Register = () => {
 
   const storage = getStorage();
 
-  // Geocode the clicked location and search for a nearby hospital
+  // Geocode the clicked location and fetch nearby hospital details
   const geocodeLatLng = async (latLng) => {
     if (!window.google || !window.google.maps) {
       console.error("Google Maps API not loaded");
@@ -121,28 +117,16 @@ const Register = () => {
     }
   };
 
-  // Handler for file input change
+  // Handle profile photo file selection and set image preview
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setProfilePhotoFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setProfilePhotoFile(file);
+      setPreviewImage(URL.createObjectURL(file));
     }
   };
 
   const register = async () => {
-    console.log("Email:", email);
-    console.log("Password:", password);
-    console.log("Username:", username);
-    console.log("Name:", name);
-    console.log("Specialty:", specialty);
-    console.log("Available Days:", availableDays);
-    console.log("Consultation Hours:", consultationHours);
-    console.log("Platform:", platform);
-    console.log("Contact Info:", contactInfo);
-    console.log("Hospital Location:", hospitalLocation);
-    console.log("Hospital Address:", hospitalAddress);
-    console.log("Confirm Password:", confirmPassword);
-    console.log("Profile Photo File:", profilePhotoFile);
-
     if (password !== confirmPassword) {
       alert("Passwords do not match.");
       return;
@@ -150,7 +134,6 @@ const Register = () => {
     if (
       !email ||
       !password ||
-      !username ||
       !name ||
       !specialty ||
       availableDays.length === 0 ||
@@ -163,25 +146,20 @@ const Register = () => {
       alert("Please fill in all fields and select a hospital location.");
       return;
     }
-
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // If a file was uploaded, upload it to Firebase Storage and get the URL.
       let uploadedPhotoUrl = "";
       if (profilePhotoFile) {
         const storageRef = ref(storage, `profilePhotos/${user.uid}`);
         const snapshot = await uploadBytes(storageRef, profilePhotoFile);
         uploadedPhotoUrl = await getDownloadURL(snapshot.ref);
       }
-      // Save the consultant data with the uploaded photo URL (or blank if not provided)
       await setDoc(doc(db, "consultants", user.uid), {
         userId: user.uid,
         email,
-        username,
         name,
-        photoUrl: uploadedPhotoUrl, // Blank if no file was uploaded
         specialty,
         hospitalLocation,
         hospitalAddress,
@@ -200,172 +178,202 @@ const Register = () => {
   };
 
   return (
-    <div className="w-full h-auto overflow-y-auto py-25 px-8 flex flex-col gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
-      <div className="w-full h-auto flex justify-center items-center">
-        <div className="w-[300px] h-15 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl flex justify-center items-center">
-          <div className="flex items-center justify-center">
-            <img src={Logo} alt="React logo" width="50" height="50" />
-            <label className="font-medium text-3xl font-mono ml-2">NeoCare</label>
+    <div className="min-h-screen bg-gradient-to-br from-[#F5EFE8] to-[#d5e8d4] flex flex-col items-center py-10">
+      {/* Header */}
+      <div className="mb-8">
+        <Link to="/">
+          <div className="flex items-center space-x-3">
+            <img src={Logo} alt="NeoCare Logo" className="w-16 h-16" />
+            <span className="text-4xl font-bold text-gray-800">NeoCare</span>
           </div>
-        </div>
+        </Link>
       </div>
-      <div className="w-full flex flex-row gap-2">
-        {/* Left Side - Form Fields */}
-        <div className="w-1/2 h-auto p-8 flex flex-col gap-4">
-          <label>Email</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Email"
-            type="email"
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <label>Username</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Username"
-            type="text"
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <label>Name</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Name"
-            type="text"
-            onChange={(e) => setName(e.target.value)}
-          />
-          <label>Photo URL (optional)</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Photo URL or leave blank"
-            type="text"
-            onChange={(e) => setPhotoUrl(e.target.value)}
-          />
-          <label>Or Upload Profile Photo</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-          />
-          <label>Password</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Password"
-            type="password"
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <label>Confirm Password</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Confirm Password"
-            type="password"
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-          <label>Specialty</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter your Specialty"
-            type="text"
-            onChange={(e) => setSpecialty(e.target.value)}
-          />
-          {/* Available Days Checkboxes */}
-          <label>Available Days</label>
-          <div className="flex flex-wrap gap-4">
-            {availableDaysOptions.map((day) => (
-              <label key={day} className="flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-[#6bc4c1]"
-                  checked={availableDays.includes(day)}
-                  onChange={() => toggleCheckbox(day, availableDays, setAvailableDays)}
+
+      {/* Main Container */}
+      <div className="bg-white shadow-lg rounded-lg w-full max-w-5xl overflow-hidden md:flex">
+        {/* Left Side - Registration Form */}
+        <div className="md:w-1/2 p-8 space-y-6">
+          <h2 className="text-2xl font-bold text-gray-700">Register as a Consultant</h2>
+          
+          {/* Account Information */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Email</label>
+              <input
+                type="email"
+                placeholder="Enter Email"
+                className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:border-[#6bc4c1] focus:ring focus:ring-[#6bc4c1] focus:ring-opacity-50"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Name</label>
+              <input
+                type="text"
+                placeholder="Enter Name"
+                className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:border-[#6bc4c1] focus:ring focus:ring-[#6bc4c1] focus:ring-opacity-50"
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Specialty</label>
+              <input
+                type="text"
+                placeholder="Enter your Specialty"
+                className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:border-[#6bc4c1] focus:ring focus:ring-[#6bc4c1] focus:ring-opacity-50"
+                onChange={(e) => setSpecialty(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Upload Profile Photo</label>
+              <input
+                type="file"
+                accept="image/*"
+                className="mt-1 block w-full"
+                onChange={handleFileChange}
+              />
+              {previewImage && (
+                <img
+                  src={previewImage}
+                  alt="Preview"
+                  className="mt-2 w-20 h-20 object-cover rounded-full border"
                 />
-                <span>{day}</span>
-              </label>
-            ))}
-          </div>
-          {/* Consultation Hours Checkboxes */}
-          <label>Consultation Hours</label>
-          <div className="flex flex-wrap gap-4">
-            {consultationHoursOptions.map((hour) => (
-              <label key={hour} className="flex items-center gap-1">
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600">Password</label>
                 <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-[#6bc4c1]"
-                  checked={consultationHours.includes(hour)}
-                  onChange={() => toggleCheckbox(hour, consultationHours, setConsultationHours)}
+                  type="password"
+                  placeholder="Enter Password"
+                  className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:border-[#6bc4c1] focus:ring focus:ring-[#6bc4c1] focus:ring-opacity-50"
+                  onChange={(e) => setPassword(e.target.value)}
                 />
-                <span>{hour}</span>
-              </label>
-            ))}
-          </div>
-          {/* Platform Checkboxes */}
-          <label>Platform</label>
-          <div className="flex flex-wrap gap-4">
-            {platformOptions.map((option) => (
-              <label key={option} className="flex items-center gap-1">
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600">Confirm Password</label>
                 <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-[#6bc4c1]"
-                  checked={platform.includes(option)}
-                  onChange={() => toggleCheckbox(option, platform, setPlatform)}
+                  type="password"
+                  placeholder="Confirm Password"
+                  className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:border-[#6bc4c1] focus:ring focus:ring-[#6bc4c1] focus:ring-opacity-50"
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
-                <span>{option}</span>
-              </label>
-            ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Contact Information (Phone Number)</label>
+              <input
+                type="text"
+                placeholder="Enter Phone Number"
+                className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:border-[#6bc4c1] focus:ring focus:ring-[#6bc4c1] focus:ring-opacity-50"
+                onChange={(e) => setContactInfo(e.target.value)}
+              />
+            </div>
           </div>
-          <label>Contact Information (Phone Number)</label>
-          <input
-            className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            placeholder="Enter Phone Number"
-            type="text"
-            onChange={(e) => setContactInfo(e.target.value)}
-          />
+
+          <hr className="border-gray-300" />
+
+          {/* Consultation Details */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-700">Consultation Details</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Available Days</label>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {availableDaysOptions.map((day) => (
+                  <label key={day} className="flex items-center space-x-1">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 text-[#6bc4c1] border-gray-300 rounded"
+                      checked={availableDays.includes(day)}
+                      onChange={() => toggleCheckbox(day, availableDays, setAvailableDays)}
+                    />
+                    <span className="text-sm text-gray-700">{day}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Consultation Hours</label>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {consultationHoursOptions.map((hour) => (
+                  <label key={hour} className="flex items-center space-x-1">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 text-[#6bc4c1] border-gray-300 rounded"
+                      checked={consultationHours.includes(hour)}
+                      onChange={() => toggleCheckbox(hour, consultationHours, setConsultationHours)}
+                    />
+                    <span className="text-sm text-gray-700">{hour}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600">Platform</label>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {platformOptions.map((option) => (
+                  <label key={option} className="flex items-center space-x-1">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 text-[#6bc4c1] border-gray-300 rounded"
+                      checked={platform.includes(option)}
+                      onChange={() => toggleCheckbox(option, platform, setPlatform)}
+                    />
+                    <span className="text-sm text-gray-700">{option}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <button
-            type="button"
             onClick={register}
-            className="w-full h-10 rounded-xl bg-[#6bc4c1] text-white font-medium text-xl mt-5 font-mono cursor-pointer duration-300 hover:bg-[#48817f]"
+            className="w-full py-3 mt-6 bg-[#6bc4c1] text-white font-semibold rounded-md hover:bg-[#48817f] transition-colors"
           >
-            SIGN UP
+            Sign Up
           </button>
-          <div className="flex flex-col justify-center items-center gap-5">
-            <label>
-              Already have an Account?{" "}
-              <Link to="/" className="underline">
-                Sign In!
-              </Link>
-            </label>
-          </div>
+
+          <p className="text-center text-sm text-gray-600">
+            Already have an account?{" "}
+            <Link to="/" className="underline text-[#6bc4c1] hover:text-[#48817f]">
+              Sign In!
+            </Link>
+          </p>
         </div>
-        {/* Right Side - Map */}
-        <div className="w-1/2 flex items-center justify-center">
-          <div className="w-full">
-            <label>Hospital Location</label>
-            {isLoaded ? (
-              <GoogleMap
-                mapContainerStyle={mapContainerStyle}
-                zoom={10}
-                center={center}
-                onClick={handleMapClick}
-              >
-                {hospitalLocation && <Marker position={hospitalLocation} />}
-              </GoogleMap>
-            ) : (
-              <p>Loading map...</p>
-            )}
-            {hospitalLocation && (
-              <p>
+
+        {/* Right Side - Map for Hospital Location */}
+        <div className="md:w-1/2 border-t md:border-t-0 md:border-l border-gray-200 p-8 flex flex-col">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Hospital Location</h3>
+          {isLoaded ? (
+            <GoogleMap
+              mapContainerStyle={mapContainerStyle}
+              zoom={10}
+              center={center}
+              onClick={handleMapClick}
+            >
+              {hospitalLocation && <Marker position={hospitalLocation} />}
+            </GoogleMap>
+          ) : (
+            <p className="text-gray-600">Loading map...</p>
+          )}
+          {hospitalLocation && (
+            <div className="mt-4">
+              <p className="text-sm text-gray-700">
                 Selected Location: Latitude: {hospitalLocation.lat}, Longitude: {hospitalLocation.lng}
               </p>
-            )}
-            {hospitalAddress && <p>Hospital Address: {hospitalAddress}</p>}
-            <input
-              type="text"
-              placeholder="Hospital Name (auto-filled)"
-              value={hospitalAddress}
-              onChange={(e) => setHospitalAddress(e.target.value)}
-              readOnly
-              className="w-full h-10 rounded-xl border border-[#6bc4c1] bg-white px-4"
-            />
-          </div>
+            </div>
+          )}
+          {hospitalAddress && (
+            <div className="mt-2">
+              <p className="text-sm text-gray-700">Hospital Address:</p>
+              <input
+                type="text"
+                value={hospitalAddress}
+                readOnly
+                className="mt-1 block w-full rounded-md border-gray-300 p-2 focus:outline-none"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
