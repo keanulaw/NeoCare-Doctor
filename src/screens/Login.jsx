@@ -1,8 +1,8 @@
-import React from "react";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { auth } from "../configs/firebase-config";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "../configs/firebase-config";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import Logo from "../assets/Logo.png";
 
@@ -13,11 +13,28 @@ const Login = () => {
 
   const login = async () => {
     try {
+      // Authenticate the user using Firebase Authentication.
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      if (userCredential.user) {
-        console.log("Successfully logged in:", userCredential.user.uid);
-        navigate("/landing");
+      const user = userCredential.user;
+      console.log("Successfully logged in:", user.uid);
+      
+      // Retrieve the consultant's document from Firestore.
+      const docRef = doc(db, "consultants", user.uid);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Check if the account has been approved.
+        if (data.approvalStatus !== "accepted") {
+          alert("Your account is not yet approved. Please wait for clinic approval.");
+          // Sign out the user if not approved.
+          await signOut(auth);
+          return;
+        }
       }
+      
+      // If approved, navigate to the landing page.
+      navigate("/landing");
     } catch (error) {
       console.error("Error signing in:", error);
       alert("Login failed: " + error.message);

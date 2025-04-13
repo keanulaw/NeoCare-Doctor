@@ -1,11 +1,48 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Logo from "../assets/Logo.png";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../configs/firebase-config";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { GoogleMap, Marker, useLoadScript } from "@react-google-maps/api";
+import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { GoogleMap, Marker, useLoadScript, Autocomplete, InfoWindow } from "@react-google-maps/api";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+// Sample custom map styles (you can adjust these or get a custom theme from Snazzy Maps)
+const customMapStyles = [
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#193341" }],
+  },
+  {
+    featureType: "landscape",
+    elementType: "geometry",
+    stylers: [{ color: "#2c5a71" }],
+  },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#29768a" }, { lightness: 0 }],
+  },
+  {
+    featureType: "poi",
+    elementType: "geometry",
+    stylers: [{ color: "#406d80" }],
+  },
+  {
+    featureType: "transit",
+    elementType: "geometry",
+    stylers: [{ color: "#406d80" }],
+  },
+  {
+    elementType: "labels.text.stroke",
+    stylers: [{ visibility: "on" }, { color: "#3e606f" }, { weight: 2 }, { gamma: 0.84 }],
+  },
+  {
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#ffffff" }],
+  },
+];
 
 const mapContainerStyle = {
   width: "100%",
@@ -41,7 +78,57 @@ const consultationHoursOptions = [
 
 const platformOptions = ["In-person", "Online"];
 
+// Helper function to convert degrees to radians
+function toRad(deg) {
+  return deg * Math.PI / 180;
+}
+
+// Haversine formula for distance (in km) between two coordinates
+function calculateDistance(loc1, loc2) {
+  const R = 6371; // Radius of Earth in kilometers
+  const dLat = toRad(loc2.lat - loc1.lat);
+  const dLon = toRad(loc2.lng - loc1.lng);
+  const lat1 = toRad(loc1.lat);
+  const lat2 = toRad(loc2.lat);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLon / 2) *
+      Math.sin(dLon / 2) *
+      Math.cos(lat1) *
+      Math.cos(lat2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Function to find a matching clinic given doctor's selected location.
+// Clinics are stored in the "users" collection with role "clinic"
+const findMatchingClinic = async (doctorLocation) => {
+  try {
+    const clinicsRef = collection(db, "users");
+    const q = query(clinicsRef, where("role", "==", "clinic"));
+    const querySnapshot = await getDocs(q);
+    let matchingClinic = null;
+
+    querySnapshot.forEach((docSnap) => {
+      const clinicData = docSnap.data();
+      if (clinicData.location) {
+        // Calculate distance (km) between doctor's selected location and clinic's stored location
+        const distance = calculateDistance(doctorLocation, clinicData.location);
+        // Use a threshold (e.g., 1 km) for a match
+        if (distance < 1) {
+          matchingClinic = { id: docSnap.id, data: clinicData };
+        }
+      }
+    });
+    return matchingClinic;
+  } catch (error) {
+    console.error("Error finding matching clinic:", error);
+    return null;
+  }
+};
+
 const Register = () => {
+  // Registration state variables
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -55,6 +142,8 @@ const Register = () => {
   const [contactInfo, setContactInfo] = useState("");
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [selectedMarker, setSelectedMarker] = useState(null);
+  const [autocomplete, setAutocomplete] = useState(null);
   const navigate = useNavigate();
 
   const { isLoaded } = useLoadScript({
@@ -64,7 +153,8 @@ const Register = () => {
 
   const storage = getStorage();
 
-  // Geocode the clicked location and fetch nearby hospital details
+  // Function to geocode a clicked location and retrieve address & hospital details.
+  // Removed the alert for errors. Only logs the error to the console.
   const geocodeLatLng = async (latLng) => {
     if (!window.google || !window.google.maps) {
       console.error("Google Maps API not loaded");
@@ -94,11 +184,12 @@ const Register = () => {
         setHospitalAddress(formattedAddress);
       }
     } catch (error) {
-      console.error("Error:", error);
-      alert("Error fetching hospital details.");
+      console.error("Error fetching hospital details:", error);
+      // Alert removed as per request.
     }
   };
 
+  // Map click handler: update location, geocode address, show marker InfoWindow.
   const handleMapClick = (event) => {
     const latLng = {
       lat: event.latLng.lat(),
@@ -106,7 +197,30 @@ const Register = () => {
     };
     setHospitalLocation(latLng);
     geocodeLatLng(latLng);
+    setSelectedMarker(latLng);
     console.log("Hospital Location Set:", latLng);
+  };
+
+  // Autocomplete handlers: load the instance and update location on place change.
+  const onLoad = (autocompleteInstance) => {
+    setAutocomplete(autocompleteInstance);
+  };
+
+  const onPlaceChanged = () => {
+    if (autocomplete !== null) {
+      const place = autocomplete.getPlace();
+      if (place?.geometry) {
+        const loc = {
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+        };
+        setHospitalLocation(loc);
+        setSelectedMarker(loc);
+        setHospitalAddress(place.formatted_address || place.name);
+      }
+    } else {
+      console.log("Autocomplete is not loaded yet!");
+    }
   };
 
   const toggleCheckbox = (value, currentArray, setArray) => {
@@ -117,7 +231,7 @@ const Register = () => {
     }
   };
 
-  // Handle profile photo file selection and set image preview
+  // Handle profile photo file selection and preview.
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -147,6 +261,7 @@ const Register = () => {
       return;
     }
     try {
+      // Create user authentication record
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
@@ -156,6 +271,15 @@ const Register = () => {
         const snapshot = await uploadBytes(storageRef, profilePhotoFile);
         uploadedPhotoUrl = await getDownloadURL(snapshot.ref);
       }
+
+      // Find a matching clinic based on the selected hospital location
+      const matchingClinic = await findMatchingClinic(hospitalLocation);
+      if (!matchingClinic) {
+        alert("No matching clinic found. Please ensure your selected location corresponds to a registered clinic.");
+        return;
+      }
+      
+      // Save doctor's data in "consultants" collection with reference to the matching clinic.
       await setDoc(doc(db, "consultants", user.uid), {
         userId: user.uid,
         email,
@@ -167,9 +291,12 @@ const Register = () => {
         consultationHours,
         platform,
         contactInfo,
+        approvalStatus: "pending",
+        clinicId: matchingClinic.id,
+        profilePhoto: uploadedPhotoUrl,
       });
 
-      alert("Registration successful!");
+      alert("Registration successful! Please await your clinic's approval.");
       navigate("/");
     } catch (error) {
       console.error("Error signing up:", error);
@@ -341,17 +468,52 @@ const Register = () => {
           </p>
         </div>
 
-        {/* Right Side - Map for Hospital Location */}
+        {/* Right Side - Enhanced Map */}
         <div className="md:w-1/2 border-t md:border-t-0 md:border-l border-gray-200 p-8 flex flex-col">
           <h3 className="text-lg font-semibold text-gray-700 mb-4">Select Hospital Location</h3>
+          {/* Autocomplete Search Input */}
+          {isLoaded ? (
+            <div className="mb-4">
+              <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
+                <input
+                  type="text"
+                  placeholder="Search for hospital location"
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                />
+              </Autocomplete>
+            </div>
+          ) : (
+            <p>Loading map...</p>
+          )}
           {isLoaded ? (
             <GoogleMap
               mapContainerStyle={mapContainerStyle}
               zoom={10}
-              center={center}
+              center={hospitalLocation || center}
               onClick={handleMapClick}
+              options={{
+                styles: customMapStyles,
+                streetViewControl: false,
+                mapTypeControl: false,
+              }}
             >
-              {hospitalLocation && <Marker position={hospitalLocation} />}
+              {hospitalLocation && (
+                <Marker
+                  position={hospitalLocation}
+                  onClick={() => setSelectedMarker(hospitalLocation)}
+                />
+              )}
+              {selectedMarker && (
+                <InfoWindow
+                  position={selectedMarker}
+                  onCloseClick={() => setSelectedMarker(null)}
+                >
+                  <div>
+                    <h4>Hospital Address</h4>
+                    <p>{hospitalAddress}</p>
+                  </div>
+                </InfoWindow>
+              )}
             </GoogleMap>
           ) : (
             <p className="text-gray-600">Loading map...</p>
