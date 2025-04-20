@@ -42,7 +42,6 @@ const AddConsultationNote = () => {
   const handleAddNote = async () => {
     setLoading(true);
     const currentUser = auth.currentUser;
-    
     if (!currentUser) {
       alert("Please sign in to save notes");
       setLoading(false);
@@ -50,25 +49,31 @@ const AddConsultationNote = () => {
     }
 
     try {
-      // Validate client document exists
+      // 1) Validate client document exists
       const clientDocRef = doc(db, "clients", id);
       const clientDoc = await getDoc(clientDocRef);
-
       if (!clientDoc.exists()) {
         throw new Error("Client document not found");
       }
 
-      // Verify consultant relationship
+      // 2) Verify consultant relationship
       if (clientDoc.data().consultantId !== currentUser.uid) {
         throw new Error("You are not assigned to this client");
       }
 
-      // Create the note with proper references
+      // 3) Fetch this doctor's display name
+      const profSnap = await getDoc(doc(db, "consultants", currentUser.uid));
+      const consultantName = profSnap.exists()
+        ? profSnap.data().name
+        : currentUser.displayName || "Dr. Unknown";
+
+      // 4) Create the note with embedded consultantName
       await addDoc(collection(db, "consultationNotes"), {
         clientId: id,
-        consultantId: currentUser.uid,  // Explicitly store consultant ID
+        consultantId: currentUser.uid,    // store consultant ID
+        consultantName,                   // ← new field
         ...formData,
-        createdAt: serverTimestamp(),  // Use server-side timestamp for accuracy
+        createdAt: serverTimestamp(),     // server timestamp
       });
 
       navigate(`/clients/${id}`);
@@ -76,6 +81,7 @@ const AddConsultationNote = () => {
       console.error("Error adding note:", error);
       alert(`Save failed: ${error.message}`);
     }
+
     setLoading(false);
   };
 

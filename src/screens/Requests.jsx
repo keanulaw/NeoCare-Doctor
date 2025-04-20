@@ -1,147 +1,133 @@
 import React, { useEffect, useState } from "react";
-import { db, auth } from "../configs/firebase-config";
-import { collection, doc, getDocs, updateDoc, addDoc, getDoc, deleteDoc, query, where } from "firebase/firestore";
-import Header from "../components/Header";
 import { useNavigate } from "react-router-dom";
-
-// Function to generate a consistent conversation ID
-const generateConversationId = (userId, consultantId) => {
-  return [userId, consultantId].sort().join('_');
-};
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc
+} from "firebase/firestore";
+import { db, auth } from "../configs/firebase-config";
+import Header from "../components/Header";
 
 const Requests = () => {
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-  const currentUser = auth.currentUser;
+  const [bookings, setBookings] = useState([]);
+  const [busyId, setBusyId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const nav = useNavigate();
+  const user = auth.currentUser;
 
   useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const q = query(collection(db, "appointmentRequests"), where("consultantId", "==", currentUser.uid));
-        const querySnapshot = await getDocs(q);
-        const requestsData = querySnapshot.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          return { 
-            id: docSnapshot.id,
-            ...data,
-            date: data.date?.toDate() // Convert Firestore timestamp to Date
-          };
-        });
-        setRequests(requestsData);
-      } catch (error) {
-        console.error("Error fetching requests: ", error);
-      }
-    };
+    if (!user) { nav("/"); return; }
 
-    if (currentUser) {
-      fetchRequests();
-    } else {
-      navigate('/'); // Redirect to login if not authenticated
-    }
-  }, [currentUser, navigate]);
-
-  const acceptAppointment = async (requestId) => {
-    setLoading(true);
-    try {
-      const requestRef = doc(db, "appointmentRequests", requestId);
-      await updateDoc(requestRef, { status: "accepted" });
-
-      const requestDoc = await getDoc(requestRef);
-      if (requestDoc.exists()) {
-        const requestData = requestDoc.data();
-        // Generate a conversation ID using client and consultant IDs
-        const conversationId = generateConversationId(requestData.userId, currentUser.uid);
-        // Create a client document for the accepted appointment
-        await addDoc(collection(db, "clients"), {
-          ...requestData,
-          consultantId: currentUser.uid,
-          acceptedAt: new Date(),
-          conversationId,
-        });
-
-        // Remove the accepted request from local state
-        setRequests(prevRequests => prevRequests.filter(request => request.id !== requestId));
-
-        alert("Appointment accepted successfully!");
-        // Navigate to the Clients page
-        navigate("/clients");
-      }
-    } catch (error) {
-      console.error("Error accepting appointment: ", error);
-      alert("Failed to accept the appointment. Please try again.");
-    }
-    setLoading(false);
-  };
-
-  const declineAppointment = async (requestId) => {
-    if (window.confirm("Are you sure you want to decline this request?")) {
-      setLoading(true);
-      try {
-        await deleteDoc(doc(db, "appointmentRequests", requestId));
-        setRequests(prevRequests => prevRequests.filter(request => request.id !== requestId));
-        alert("Appointment declined successfully!");
-      } catch (error) {
-        console.error("Error declining appointment: ", error);
-        alert("Failed to decline the appointment. Please try again.");
-      }
+    // listen to pending bookings for this doctor
+    const q = query(
+      collection(db, "bookings"),
+      where("doctorId", "==", user.uid),
+      where("status", "==", "pending")
+    );
+    const unsub = onSnapshot(q, snap => {
+      setBookings(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        date: d.data().dateTime.toDate()
+      })));
       setLoading(false);
+    }, err => {
+      console.error("Error loading bookings:", err);
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, [user, nav]);
+
+  const accept = async (id) => {
+    setBusyId(id);
+    try {
+      // mark booking approved
+      await updateDoc(doc(db, "bookings", id), { status: "approved" });
+
+      alert("Booking accepted! User can now pay.");
+      // optionally navigate or refresh
+    } catch (e) {
+      console.error("Accept error:", e);
+      alert("Failed to accept—try again.");
+    } finally {
+      setBusyId("");
     }
   };
 
-  const formatDate = (date) => {
-    return date?.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  const decline = async (id) => {
+    if (!window.confirm("Decline this booking?")) return;
+    setBusyId(id);
+    try {
+      await deleteDoc(doc(db, "bookings", id));
+      alert("Booking declined.");
+    } catch (e) {
+      console.error("Decline error:", e);
+      alert("Failed to decline—try again.");
+    } finally {
+      setBusyId("");
+    }
   };
 
-  return (
-    <div className="w-full h-screen flex flex-col items-center bg-[#F5EFE8]">
-      <Header />
-      <div className="pt-24 w-full max-w-2xl flex flex-col items-center">
-        <h1 className="text-4xl font-bold text-center mb-4">Appointment Requests</h1>
-        <p className="text-center mb-8">
-          Share your parenting aspirations—we're here to support your family's unique path.
-        </p>
-        <div className="bg-white shadow-md rounded-lg p-4 w-full">
-          {requests.length > 0 ? (
-            requests.map((request) => (
-              <div key={request.id} className="flex justify-between items-center border-b py-4">
-                <div className="flex flex-col">
-                  <span className="font-bold">{request.fullName}</span>
-                  <span className="text-sm text-gray-600">
-                    {formatDate(request.date)} at {request.time}
-                  </span>
-                  <span className="text-sm">Status: {request.status}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => acceptAppointment(request.id)}
-                    className="bg-pink-500 text-white px-4 py-2 rounded"
-                    disabled={loading}
-                  >
-                    {loading ? "Processing..." : "Accept"}
-                  </button>
-                  <button
-                    onClick={() => declineAppointment(request.id)}
-                    className="border border-pink-500 text-pink-500 px-4 py-2 rounded"
-                    disabled={loading}
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-gray-500">
-              No appointment requests found.
-            </p>
-          )}
+  const fmtDate = d =>
+    d.toLocaleDateString("en-US", {
+      weekday: "short", year: "numeric", month: "short", day: "numeric"
+    });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <span>Loading bookings…</span>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-white">
+      <Header />
+
+      <main className="flex-1 pt-20 px-4">
+        <h1 className="text-3xl font-bold mb-4">Pending Appointments</h1>
+        <section className="space-y-4">
+          {bookings.length > 0 ? bookings.map(b => (
+            <div
+              key={b.id}
+              className="p-6 bg-white shadow rounded-lg flex justify-between items-center border-l-4 border-purple-500"
+            >
+              <div>
+                <p className="font-semibold">{b.userId /* or name if you stored it */}</p>
+                <p className="text-gray-600">{fmtDate(b.date)}</p>
+                <p className="text-gray-600">₱{(b.amount / 100).toFixed(2)}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => accept(b.id)}
+                  disabled={busyId === b.id}
+                  className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+                >
+                  {busyId === b.id ? "…" : "Accept"}
+                </button>
+                <button
+                  onClick={() => decline(b.id)}
+                  disabled={busyId === b.id}
+                  className="px-4 py-2 border border-red-600 text-red-600 rounded disabled:opacity-50"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-gray-600">No pending appointments.</p>
+          )}
+        </section>
+      </main>
     </div>
   );
 };

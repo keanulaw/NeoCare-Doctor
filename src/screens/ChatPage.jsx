@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, query, where, orderBy, onSnapshot, getDoc, doc } from "firebase/firestore";
+import {
+  collection, query, where, orderBy, onSnapshot,
+  getDoc, doc
+} from "firebase/firestore";
 import { db, auth } from "../configs/firebase-config";
 import Header from "../components/Header";
 
@@ -8,137 +11,132 @@ const ChatPage = () => {
   const [conversations, setConversations] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const nav = useNavigate();
 
+  /* ─── fetch list of conversations for logged‑in doctor ─── */
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (!user) {
-        console.warn("No doctor logged in.");
-        navigate('/');
-        return;
-      }
+    const unsubAuth = auth.onAuthStateChanged(async user => {
+      if (!user) { nav("/"); return; }
 
-      const chatsRef = collection(db, "chats");
       const q = query(
-        chatsRef,
+        collection(db, "chats"),
         where("doctorUid", "==", user.uid),
         orderBy("createdAt", "desc")
       );
 
-      const unsubscribeChats = onSnapshot(q, async (snapshot) => {
-        const convs = [];
+      const unsubChats = onSnapshot(q, async snap => {
+        const base = [];
         const namePromises = [];
 
-        snapshot.forEach((chatDoc) => {
-          const chatData = chatDoc.data();
-          convs.push({ id: chatDoc.id, ...chatData });
+        snap.forEach(d => {
+          const chat = d.data();
+          base.push({ id: d.id, ...chat });
 
-          if (chatData.parentUid) {
-            const parentDocRef = doc(db, "users", chatData.parentUid);
+          /* fetch parent’s name */
+          if (chat.parentUid) {
             namePromises.push(
-              getDoc(parentDocRef).then((userDoc) => ({
-                chatId: chatDoc.id,
-                parentName: userDoc.exists() ? userDoc.data().fullName : "Unknown",
+              getDoc(doc(db, "users", chat.parentUid)).then(u => ({
+                id: d.id,
+                parentName: u.exists() ? u.data().fullName : "Unknown",
               }))
             );
           }
         });
 
-        const resolvedNames = await Promise.all(namePromises);
-        const updatedConvs = convs.map((conv) => {
-          const nameObj = resolvedNames.find((n) => n.chatId === conv.id);
-          return { ...conv, parentName: nameObj ? nameObj.parentName : conv.parentUid };
-        });
-
-        setConversations(updatedConvs);
+        const names = await Promise.all(namePromises);
+        setConversations(
+          base.map(c => {
+            const n = names.find(x => x.id === c.id);
+            return { ...c, parentName: n ? n.parentName : c.parentUid };
+          })
+        );
         setLoading(false);
       });
 
-      return () => unsubscribeChats();
+      return () => unsubChats();
     });
 
-    return () => unsubscribe();
-  }, [navigate]);
+    return () => unsubAuth();
+  }, [nav]);
 
+  /* ─── listen to last message of each chat ─── */
   useEffect(() => {
-    const unsubscribes = conversations.map((conv) => {
-      const messagesRef = collection(db, "chats", conv.id, "messages");
-      const q = query(messagesRef, orderBy("createdAt", "desc"));
-
-      return onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const lastMsgDoc = snapshot.docs[0];
-          const lastMsgData = lastMsgDoc.data();
-          setLastMessages((prev) => ({
-            ...prev,
-            [conv.id]: {
-              text: lastMsgData.text || "",
-              createdAt: lastMsgData.createdAt,
-            },
-          }));
-        } else {
-          setLastMessages((prev) => ({
-            ...prev,
-            [conv.id]: { text: "No messages yet", createdAt: null },
-          }));
-        }
+    const unsubList = conversations.map(conv => {
+      const q = query(
+        collection(db, "chats", conv.id, "messages"),
+        orderBy("createdAt", "desc")
+      );
+      return onSnapshot(q, snap => {
+        const last = snap.empty ? null : snap.docs[0].data();
+        setLastMessages(p => ({
+          ...p,
+          [conv.id]: last
+            ? { text: last.text || "", createdAt: last.createdAt }
+            : { text: "No messages yet", createdAt: null },
+        }));
       });
     });
-
-    return () => unsubscribes.forEach((unsub) => unsub());
+    return () => unsubList.forEach(u => u());
   }, [conversations]);
 
-  const handleChatClick = (chatId) => {
-    navigate(`/chat/${chatId}`);
-  };
+  const openChat = id => nav(`/chat/${id}`);
 
+  const fmtTime = t =>
+    t ? new Date(t.seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+
+  /* ─── UI ─── */
   if (loading) {
-    return <div>Loading conversations...</div>;
+    return (
+      <div className="w-full min-h-screen bg-gradient-to-b from-white to-[#F2C2DE] flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-xl text-gray-600">Loading conversations…</span>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="w-full h-screen flex flex-col items-center bg-[#F5EFE8]">
+    <div className="w-full min-h-screen bg-gradient-to-b from-white to-[#F2C2DE] flex flex-col">
       <Header />
-      <div className="pt-24 w-full max-w-2xl flex flex-col items-center">
-        <h1 className="text-4xl font-bold text-center mb-6">Messages</h1>
-        <p className="text-center text-gray-600 mb-6">
-          View and continue your conversations with parents.
+
+      <main className="flex-1 flex flex-col items-center pt-20 px-4">
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">Messages</h1>
+        <p className="text-center text-gray-700 mb-8 max-w-md">
+          View and continue conversations with parents.
         </p>
-        <div className="space-y-4 w-full">
-          {conversations.length > 0 ? (
-            conversations.map((conv) => {
-              const lastMsg = lastMessages[conv.id];
+
+        <section className="w-full max-w-3xl space-y-4">
+          {conversations.length ? (
+            conversations.map(c => {
+              const last = lastMessages[c.id];
               return (
-                <div
-                  key={conv.id}
-                  onClick={() => handleChatClick(conv.id)}
-                  className="cursor-pointer block transition-transform hover:scale-[1.02]"
+                <button
+                  key={c.id}
+                  onClick={() => openChat(c.id)}
+                  className="w-full text-left transform hover:scale-[1.02] transition"
                 >
-                  <div className="flex justify-between items-center p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow">
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-800">
-                        {conv.parentName || "Chat"}
-                      </h2>
-                      <p className="text-sm text-gray-600">
-                        {lastMsg ? lastMsg.text : "Loading..."}
+                  <div className="bg-white shadow-md rounded-lg p-6 flex justify-between items-start border-l-4 border-[#DA79B9]">
+                    <div className="pr-4">
+                      <h2 className="text-lg font-semibold text-gray-900">{c.parentName}</h2>
+                      <p className="text-sm text-gray-600 truncate max-w-[220px]">
+                        {last ? last.text : "Loading…"}
                       </p>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {lastMsg && lastMsg.createdAt
-                        ? new Date(lastMsg.createdAt.seconds * 1000).toLocaleTimeString()
-                        : ""}
-                    </div>
+                    <span className="text-sm text-gray-500 whitespace-nowrap">
+                      {last ? fmtTime(last.createdAt) : ""}
+                    </span>
                   </div>
-                </div>
+                </button>
               );
             })
           ) : (
-            <p className="text-center text-gray-500">
+            <p className="text-center text-gray-600">
               No conversations yet. Start chatting with a parent!
             </p>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 };

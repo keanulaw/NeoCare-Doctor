@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../configs/firebase-config";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
 import Logo from "../assets/Logo.png";
 
 const Login = () => {
@@ -13,98 +12,93 @@ const Login = () => {
 
   const login = async () => {
     try {
-      // Authenticate the user using Firebase Authentication.
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      console.log("Successfully logged in:", user.uid);
-      
-      // Retrieve the consultant's document from Firestore.
-      const docRef = doc(db, "consultants", user.uid);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Check if the account has been approved.
-        if (data.approvalStatus !== "accepted") {
-          alert("Your account is not yet approved. Please wait for clinic approval.");
-          // Sign out the user if not approved.
-          await signOut(auth);
-          return;
-        }
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      const snap = await getDoc(doc(db, "consultants", user.uid));
+      if (snap.exists() && snap.data().approvalStatus !== "accepted") {
+        alert("Your account is not yet approved. Please wait for clinic approval.");
+        await signOut(auth);
+        return;
       }
-      
-      // If approved, navigate to the landing page.
       navigate("/landing");
-    } catch (error) {
-      console.error("Error signing in:", error);
-      alert("Login failed: " + error.message);
+    } catch (e) {
+      console.error("Sign‑in error:", e);
+      alert("Login failed: " + e.message);
     }
   };
 
   return (
-    <div className="w-full h-screen flex flex-col justify-center items-center gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4] relative">
-      {/*Header*/}
-      <div className="absolute w-[300px] h-15 border border-white rounded-full bg-[#d5e8d4] shadow-black drop-shadow-xl top-6 justify-center items-center flex ">
-        <div className="flex items-center justify-center">
-          <img src={Logo} alt="React logo" width="50" height="50" />
-          <label className="font-medium text-3xl font-mono">NeoCare</label>
+    <>
+      {/* uses the same white→pink gradient background as Register.jsx */}
+      <div className="w-full min-h-screen flex flex-col items-center justify-start pt-16 bg-gradient-to-b from-white to-[#F2C2DE] p-4">
+        {/* logo + title */}
+        <div className="flex flex-col items-center text-center gap-3 w-[800px]">
+          <div className="flex items-center justify-center mb-6">
+            <img src={Logo} alt="NeoCare logo" className="w-24 h-24" />
+            <span className="ml-3 text-5xl font-extrabold font-mono text-[#DA79B9]">
+              NeoCare
+            </span>
+          </div>
+
+          <h1 className="font-bold text-6xl text-gray-900">
+            Launch your professionality
+            <span className="text-[#DA79B9]"> chapter </span>
+            as a consultant
+          </h1>
+        </div>
+
+        {/* quote */}
+        <div className="w-[600px] text-center mt-6">
+          <p className="font-medium text-lg font-mono text-gray-800">
+            "Making the decision to have a child is momentous. It is to decide
+            forever to have your heart go walking around outside your body."
+            <br />— Elizabeth Stone
+          </p>
+        </div>
+
+        {/* form card */}
+        <div className="w-[600px] p-8 flex flex-col gap-4 bg-white rounded-xl shadow-lg mt-6">
+          <label className="font-medium text-gray-800">Email</label>
+          <input
+            type="email"
+            placeholder="Enter Email"
+            className="w-full h-10 rounded-xl border border-[#DA79B9] px-4 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <label className="font-medium text-gray-800">Password</label>
+          <input
+            type="password"
+            placeholder="Enter Password"
+            className="w-full h-10 rounded-xl border border-[#DA79B9] px-4 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <button
+            onClick={login}
+            className="w-full h-10 rounded-xl bg-[#DA79B9] text-white font-medium text-xl mt-5 font-mono hover:bg-[#C064A0] transition-colors"
+          >
+            SIGN IN
+          </button>
+
+          <div className="w-full flex justify-end">
+            <Link className="font-medium text-sm font-mono underline text-[#DA79B9]">
+              Forgot Password?
+            </Link>
+          </div>
+        </div>
+
+        {/* footer links */}
+        <div className="flex flex-col items-center gap-3 mt-6">
+          <span className="underline text-[#DA79B9]">Need Help?</span>
+          <span className="text-gray-800">
+            Don't have an account?{" "}
+            <Link to="/register" className="underline text-[#DA79B9]">
+              Sign Up!
+            </Link>
+          </span>
         </div>
       </div>
-      <div className="flex flex-col justify-center items-center gap-3 w-[800px] text-center">
-        <label className="font-bold text-6xl">
-          Launch your professionality
-          <label className="text-[#6bc4c1]"> chapter </label>
-          as a consultant
-        </label>
-      </div>
-
-      <div className="w-[600px] text-center">
-        <label className="font-medium text-lg font-mono ">
-          "Making the decision to have a child is momentous. It is to decide
-          forever to have your heart go walking around outside your body." -
-          Elizabeth Stone
-        </label>
-      </div>
-
-      <div className="w-[600px] h-auto p-8 flex gap-2 flex-col">
-        <label>Email</label>
-        <input
-          className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
-          placeholder="Enter Email"
-          type="email"
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <label>Password</label>
-        <input
-          className="w-full h-10 rounded-xl border-1 border-[#6bc4c1] bg-white px-4"
-          placeholder="Enter Password"
-          type="password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <button
-          onClick={login}
-          className="w-full h-10 rounded-xl bg-[#6bc4c1] text-white font-medium text-xl mt-5 font-mono cursor-pointer duration-300 hover:bg-[#48817f]"
-        >
-          SIGN IN
-        </button>
-
-        <div className="w-full flex justify-end">
-          <Link className="font-medium text-sm font-mono underline">
-            Forgot Password?
-          </Link>
-        </div>
-      </div>
-      <div className="flex-col flex justify-center items-center gap-5">
-        <label className="underline">Need Help?</label>
-        <label>
-          Don't have an account?{" "}
-          <Link to="/register" className="underline">
-            Sign Up!
-          </Link>
-        </label>
-      </div>
-    </div>
+    </>
   );
 };
 

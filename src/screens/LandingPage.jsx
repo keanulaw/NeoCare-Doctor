@@ -1,155 +1,88 @@
 import React from "react";
 import Header from "../components/Header";
-import { Link } from "react-router-dom";
-import Logo from "../assets/Logo.png";
 import Babyhead from "../assets/Babyhead.png";
 import Question from "../assets/Question.png";
 
 const LandingPage = () => {
   return (
-    <div className="w-auto overflow-y-auto">
+    <div className="w-full min-h-screen flex flex-col items-center bg-gradient-to-b from-white to-[#F2C2DE]">
       <Header />
-      <div className="pt-24">
-        {/*First Layer*/}
-        <div className="w-full h-screen flex flex-col justify-center items-center gap-15 bg-[#F5EFE8]">
-          <div className="flex flex-col justify-center items-center gap-3">
-            <label className="font-bold text-4xl">
-              {" "}
-              Welcome to NeoCare Consultant Portal{" "}
-            </label>
-            <label className="font-light text-3xl text-[#6bc4c1]">
-              {" "}
-              Empowering parents through expert guidance and support{" "}
-            </label>
-          </div>
 
-          <div className="w-[900px] text-center">
-            <label className="font-medium text-lg font-mono ">
-              {" "}
-              NeoCare is a trusted resource for new parents, offering expert
-              advice and support that feels like having a personal parenting coach
-              — but only costs a fraction of it.{" "}
-            </label>
-          </div>
+      {/* ---------------- First Section ---------------- */}
+      <section className="w-full h-screen flex flex-col justify-center items-center gap-8 px-4">
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-bold text-gray-800">
+            Welcome to NeoCare Consultant Portal
+          </h1>
+          <p className="text-2xl text-[#DA79B9] font-light">
+            Empowering parents through expert guidance and support
+          </p>
+        </div>
+        <p className="max-w-2xl text-center text-gray-700">
+          NeoCare is a trusted resource for new parents, offering expert advice and
+          support that feels like having a personal parenting coach — but only costs a
+          fraction of it.
+        </p>
+      </section>
+
+      {/* ---------------- Dashboard Section ---------------- */}
+      <section className="w-full bg-white py-16 px-4">
+        <div className="text-center mb-8 space-y-2">
+          <h2 className="text-3xl text-[#DA79B9] font-light">Dashboard</h2>
+          <h3 className="text-4xl font-bold text-gray-800">Your Impact Dashboard</h3>
         </div>
 
-        {/*Second Layer*/}
-        <div className="w-full h-[615px] flex flex-col justify-center items-center gap-15 bg-white">
-          <label className="text-3xl font-light text-[#6bc4c1]">
-            {" "}
-            Dashboard{" "}
-          </label>
-          <label className="font-bold text-4xl"> Your Impact Dashboard </label>
-          <div className="flex flex-row gap-3">
-            <div className="flex justify-center relative gap-2  flex-col px-4 w-64 h-64  border-white bg-[#F5EFE8]">
+        <div className="flex flex-wrap justify-center gap-6">
+          {[
+            ["150+", "Families Supported"],
+            ["98%", "Client Satisfaction"],
+            ["500+", "Consultations Given"],
+            ["25+", "Years Combined Experience"],
+          ].map(([value, label]) => (
+            <div
+              key={label}
+              className="w-64 h-64 bg-[#F5EFE8] rounded-xl p-6 flex flex-col justify-center items-start relative shadow"
+            >
               <img
-                className="absolute top-2 left-2"
                 src={Babyhead}
-                alt="Baby"
-                width="50"
-                height="50"
+                alt=""
+                className="w-12 h-12 absolute top-4 left-4"
               />
-              <div className="flex flex-col">
-                <label className="font-medium text-3xl font-mono text-[#6bc4c1]">
-                  150+
-                </label>
-                <label className="font-medium text-lg font-mono">
-                  Families Supported
-                </label>
-              </div>
+              <span className="mt-8 text-3xl font-mono font-medium text-[#DA79B9]">
+                {value}
+              </span>
+              <span className="text-lg text-gray-800 font-medium">{label}</span>
             </div>
-            <div className="flex justify-center relative flex-col px-4 w-64 h-64 border-white bg-[#F5EFE8]">
-              <img
-                className="absolute top-2 left-2"
-                src={Babyhead}
-                alt="Baby"
-                width="50"
-                height="50"
-              />
-              <div className="flex flex-col">
-                <label className="font-medium text-3xl font-mono text-[#6bc4c1]">
-                  98%
-                </label>
-                <label className="font-medium text-lg font-mono">
-                  Client Satisfaction
-                </label>
-              </div>
-            </div>
-            <div className="flex justify-center relative flex-col px-4 w-64 h-64  border-white bg-[#F5EFE8]">
-              <img
-                className="absolute top-2 left-2"
-                src={Babyhead}
-                alt="Baby"
-                width="50"
-                height="50"
-              />
-              <div className="flex flex-col">
-                <label className="font-medium text-3xl font-mono text-[#6bc4c1]">
-                  500+
-                </label>
-                <label className="font-medium text-lg font-mono">
-                  Consultations Given
-                </label>
-              </div>
-            </div>
-            <div className="flex justify-center relative flex-col px-4 w-64 h-64  border-white bg-[#F5EFE8]">
-              <img
-                className="absolute top-2 left-2"
-                src={Babyhead}
-                alt="Baby"
-                width="50"
-                height="50"
-              />
-              <div className="flex flex-col">
-                <label className="font-medium text-3xl font-mono text-[#6bc4c1]">
-                  25+
-                </label>
-                <label className="font-medium text-lg font-mono">
-                  Years Combined Experiences
-                </label>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
+      </section>
 
-        {/*Third Layer*/}
-        <div className="w-full h-screen flex flex-row justify-center items-center gap-15 bg-gradient-to-b to-[#F5EFE8] from-[#d5e8d4]">
-          <div className="rounded-lg flex justify-center gap-2  flex-col p-8 w-[650px] h-auto bg-white">
-            <div className="w-full flex justify-center items-center">
-              <img src={Question} alt="Baby" width="100" height="100" />
+      {/* ---------------- Mission & Role Section ---------------- */}
+      <section className="w-full py-16 px-4 bg-gradient-to-br from-[#F5EFE8] to-[#F2C2DE] flex flex-col md:flex-row justify-center items-center gap-8">
+        {[
+          [
+            "Our Mission",
+            "At NeoCare, we're dedicated to providing comprehensive support to parents, fostering healthier families and happier children. Our platform empowers consultants like you to make a meaningful difference in the lives of families around the world.",
+          ],
+          [
+            "Your Role",
+            "As a NeoCare consultant, you play a crucial role in shaping the future of families and communities. Your expertise and guidance help parents navigate the challenges of raising children, promoting positive parenting practices, and fostering healthy child development.",
+          ],
+        ].map(([title, text]) => (
+          <div
+            key={title}
+            className="bg-white rounded-xl p-8 w-full max-w-md shadow-lg space-y-4"
+          >
+            <div className="flex justify-center">
+              <img src={Question} alt="" className="w-16 h-16" />
             </div>
-            <div className="flex flex-col">
-              <label className="text-center w-full font-medium text-3xl font-mono text-[#6bc4c1]">
-                Our Mission
-              </label>
-              <label className="font-medium text-lg font-mono">
-                At NeoCare, we're dedicated to providing comprehensive support to
-                parents, fostering healthier families and happier children. Our
-                platform empowers consultants like you to make a meaningful
-                difference in the lives of families around the world.
-              </label>
-            </div>
+            <h4 className="text-2xl font-mono font-medium text-[#DA79B9] text-center">
+              {title}
+            </h4>
+            <p className="text-gray-800 text-center">{text}</p>
           </div>
-
-          <div className="rounded-lg flex justify-center gap-2 flex-col p-8 w-[650px] h-auto bg-white">
-            <div className="w-full flex justify-center items-center">
-              <img src={Question} alt="Baby" width="100" height="100" />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-center w-full font-medium text-3xl font-mono text-[#6bc4c1]">
-                Your Role
-              </label>
-              <label className="font-medium text-lg font-mono">
-                As a NeoCare consultant, you play a crucial role in shaping the
-                future of families and communities. Your expertise and guidance
-                help parents navigate the challenges of raising children,
-                promoting positive parenting practices, and fostering healthy
-                child development.
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
+        ))}
+      </section>
     </div>
   );
 };
