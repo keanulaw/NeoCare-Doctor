@@ -6,6 +6,7 @@ import {
   where,
   onSnapshot,
   doc,
+  getDoc,
   updateDoc,
   deleteDoc
 } from "firebase/firestore";
@@ -20,22 +21,51 @@ const Requests = () => {
   const user = auth.currentUser;
 
   useEffect(() => {
-    if (!user) { nav("/"); return; }
+    if (!user) {
+      nav("/");
+      return;
+    }
 
-    // listen to pending bookings for this doctor
+    // Listen to pending bookings for this doctor
     const q = query(
       collection(db, "bookings"),
       where("doctorId", "==", user.uid),
       where("status", "==", "pending")
     );
-    const unsub = onSnapshot(q, snap => {
-      setBookings(snap.docs.map(d => ({
-        id: d.id,
-        ...d.data(),
-        date: d.data().dateTime.toDate()
-      })));
+    
+    const unsub = onSnapshot(q, async (snap) => {
+      const bookingsData = await Promise.all(
+        snap.docs.map(async (d) => {
+          const data = d.data();
+          const bookingDate = data.dateTime.toDate();
+
+          // Fetch the user fullName from users collection
+          let userName = "Unknown User";
+          try {
+            const userRef = doc(db, "users", data.userId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              userName = userData.fullName || "No Name"; // Corrected here
+            } else {
+              console.log("User not found for userId:", data.userId);
+            }
+          } catch (error) {
+            console.error("Error fetching user:", error);
+          }
+
+          return {
+            id: d.id,
+            ...data,
+            date: bookingDate,
+            userName, // Attach the fetched full name
+          };
+        })
+      );
+
+      setBookings(bookingsData);
       setLoading(false);
-    }, err => {
+    }, (err) => {
       console.error("Error loading bookings:", err);
       setLoading(false);
     });
@@ -46,11 +76,8 @@ const Requests = () => {
   const accept = async (id) => {
     setBusyId(id);
     try {
-      // mark booking approved
       await updateDoc(doc(db, "bookings", id), { status: "approved" });
-
       alert("Booking accepted! User can now pay.");
-      // optionally navigate or refresh
     } catch (e) {
       console.error("Accept error:", e);
       alert("Failed to accept—try again.");
@@ -73,9 +100,12 @@ const Requests = () => {
     }
   };
 
-  const fmtDate = d =>
+  const fmtDate = (d) =>
     d.toLocaleDateString("en-US", {
-      weekday: "short", year: "numeric", month: "short", day: "numeric"
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric"
     });
 
   if (loading) {
@@ -102,7 +132,7 @@ const Requests = () => {
               className="p-6 bg-white shadow rounded-lg flex justify-between items-center border-l-4 border-purple-500"
             >
               <div>
-                <p className="font-semibold">{b.userId /* or name if you stored it */}</p>
+                <p className="font-semibold">{b.userName}</p> {/* Now using fullName */}
                 <p className="text-gray-600">{fmtDate(b.date)}</p>
                 <p className="text-gray-600">₱{(b.amount / 100).toFixed(2)}</p>
               </div>

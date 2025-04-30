@@ -3,3 +3,6 @@
 .debug {
     border: 1px red solid;
 }
+* {
+    font-family: 'Roboto', sans-serif;
+  }
