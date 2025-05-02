@@ -42,7 +42,7 @@ const Login = () => {
           <h1 className="font-bold text-6xl text-gray-900">
             Launch your professionality
             <span className="text-[#DA79B9]"> chapter </span>
-            as a consultant
+            as a healthcare professional
           </h1>
         </div>
 
@@ -71,10 +71,13 @@ const Login = () => {
             placeholder="Enter Password"
             className="w-full h-10 rounded-xl border border-[#DA79B9] px-4 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") login();
+            }}
           />
 
           <button
-            onClick={login}
+            onlick={login}
             className="w-full h-10 rounded-xl bg-[#DA79B9] text-white font-medium text-xl mt-5 font-mono hover:bg-[#C064A0] transition-colors"
           >
             SIGN IN
@@ -90,7 +93,7 @@ const Login = () => {
         {/* footer links */}
         <div className="flex flex-col items-center gap-3 mt-6">
           <span className="underline text-[#DA79B9]">Need Help?</span>
-          <span className="text-gray-800">
+          <span className="text-gray-800"> 
             Don't have an account?{" "}
             <Link to="/register" className="underline text-[#DA79B9]">
               Sign Up!
