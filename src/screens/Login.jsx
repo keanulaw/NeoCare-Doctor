@@ -21,7 +21,7 @@ const Login = () => {
       }
       navigate("/landing");
     } catch (e) {
-      console.error("Sign‑in error:", e);
+      console.error("Sign-in error:", e);
       alert("Login failed: " + e.message);
     }
   };
@@ -51,7 +51,7 @@ const Login = () => {
           <p className="font-medium text-lg font-mono text-gray-800">
             "Making the decision to have a child is momentous. It is to decide
             forever to have your heart go walking around outside your body."
-            <br />— Elizabeth Stone
+            <br />— Elizabeth Stone
           </p>
         </div>
 
@@ -77,7 +77,7 @@ const Login = () => {
           />
 
           <button
-            onlick={login}
+            onClick={login}
             className="w-full h-10 rounded-xl bg-[#DA79B9] text-white font-medium text-xl mt-5 font-mono hover:bg-[#C064A0] transition-colors"
           >
             SIGN IN
