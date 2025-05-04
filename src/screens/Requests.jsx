@@ -9,6 +9,8 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "../configs/firebase-config";
 import Header from "../components/Header";
@@ -113,8 +115,28 @@ const Requests = () => {
   const accept = async (id) => {
     setBusyId(id);
     try {
+      // 1) mark booking accepted
       await updateDoc(doc(db, "bookings", id), { status: "accepted" });
-      alert("Booking accepted! User can now pay.");
+
+      // 2) grab the booking so we can get userId and name
+      const bookingSnap = await getDoc(doc(db, "bookings", id));
+      if (bookingSnap.exists()) {
+        const { userId, userNameField } = bookingSnap.data();
+
+        // 3) upsert into clients collection with the same ID as the user
+        await setDoc(
+          doc(db, "clients", userId),
+          {
+            fullName: userNameField || "",
+            consultantId: auth.currentUser.uid, // must match your Clients.jsx query
+            status: "active",
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+
+      alert("Booking accepted! Client added."); 
     } catch (e) {
       console.error("Accept error:", e);
       alert("Failed to accept—try again.");

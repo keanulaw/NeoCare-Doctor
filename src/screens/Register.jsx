@@ -3,11 +3,24 @@ import Logo from "../assets/Logo.png";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../configs/firebase-config";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { GoogleMap, Marker, useLoadScript, Autocomplete, InfoWindow } from "@react-google-maps/api";
+import {
+  doc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import {
+  GoogleMap,
+  Marker,
+  useLoadScript,
+  Autocomplete,
+  InfoWindow,
+} from "@react-google-maps/api";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-// Sample custom map styles (you can adjust these or get a custom theme from Snazzy Maps)
+// Sample custom map styles
 const customMapStyles = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#193341" }] },
   { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#2c5a71" }] },
@@ -38,101 +51,76 @@ function calculateDistance(loc1, loc2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-const findMatchingClinic = async (doctorLocation) => {
-  try {
-    const clinicsRef = collection(db, "users");
-    const q = query(clinicsRef, where("role", "==", "clinic"));
-    const snapshot = await getDocs(q);
-
-    let closestClinic = null;
-    let closestDistance = Infinity;
-
-    snapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      if (data.location) {
-        const dist = calculateDistance(doctorLocation, data.location);
-        if (dist < closestDistance) {
-          closestDistance = dist;
-          closestClinic = { id: docSnap.id, data };
-        }
-      }
-    });
-
-    // Optional: define a maximum acceptable distance, e.g., 10 km
-    if (closestDistance <= 10) {
-      return closestClinic;
-    } else {
-      console.warn(`No clinics found within acceptable distance. Closest is ${closestDistance.toFixed(2)} km away.`);
-      return null;
-    }
-
-  } catch (e) {
-    console.error("Error finding clinic:", e);
-    return null;
-  }
+// lookup by name instead of address
+const findMatchingClinicByName = async (name) => {
+  const clinicsRef = collection(db, "users");
+  const q = query(
+    clinicsRef,
+    where("role", "==", "clinic"),
+    where("birthCenterName", "==", name)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0];
+  return { id: docSnap.id, data: docSnap.data() };
 };
 
 const Register = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Account info
+  const [email, setEmail]               = useState("");
+  const [password, setPassword]         = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [name, setName] = useState("");
-  const [specialty, setSpecialty] = useState("");
-  const [hospitalLocation, setHospitalLocation] = useState(null);
-  const [hospitalAddress, setHospitalAddress] = useState("");
+  const [name, setName]                 = useState("");
+  const [specialty, setSpecialty]       = useState("");
   const [availableDays, setAvailableDays] = useState([]);
   const [consultationHours, setConsultationHours] = useState([]);
-  const [platform, setPlatform] = useState([]);
-  const [contactInfo, setContactInfo] = useState("");
+  const [platform, setPlatform]         = useState([]);
+  const [contactInfo, setContactInfo]   = useState("");
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+
+  // ◀︎ Replaced fields:
+  const [birthCenterLocation, setBirthCenterLocation] = useState(null);
+  const [birthCenterName, setBirthCenterName]         = useState("");
+  const [birthCenterAddress, setBirthCenterAddress]   = useState("");
+
   const [selectedMarker, setSelectedMarker] = useState(null);
-  const [autocomplete, setAutocomplete] = useState(null);
+  const [autocomplete, setAutocomplete]     = useState(null);
   const navigate = useNavigate();
+  const storage  = getStorage();
   const { isLoaded } = useLoadScript({
-    googleMapsApiKey: "AIzaSyBcJDGxtpPyKTJaH8VsPdWq3RkohUNkfd4", libraries: ["places"]
+    googleMapsApiKey: "AIzaSyBcJDGxtpPyKTJaH8VsPdWq3RkohUNkfd4",
+    libraries: ["places"],
   });
-  const storage = getStorage();
 
+  // geocode sets both name & address
   const geocodeLatLng = async (latLng) => {
-    if (!window.google?.maps) return console.error("Google Maps API not loaded");
-
+    if (!window.google?.maps) return;
     const geocoder = new window.google.maps.Geocoder();
-    const service = new window.google.maps.places.PlacesService(document.createElement("div"));
+    const service  = new window.google.maps.places.PlacesService(document.createElement("div"));
 
-    try {
-      const geoResults = await geocoder.geocode({ location: latLng });
-
-      let formattedAddress = geoResults[0]?.formatted_address || "Address not found";
-
-      const places = await new Promise((resolve, reject) => {
+    geocoder.geocode({ location: latLng }, (results, status) => {
+      if (status === "OK" && results[0]) {
+        const formatted = results[0].formatted_address;
         service.nearbySearch(
-          { location: latLng, radius: 500, type: "hospital" }, // Increased radius to 500 meters
-          (results, status) => {
-            if (status === window.google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
-              resolve(results);
-            } else {
-              resolve([]);  // Resolve with empty array to prevent rejection errors
-            }
+          { location: latLng, radius: 500, type: "hospital" },
+          (placesResults, placesStatus) => {
+            const name = (placesStatus === window.google.maps.places.PlacesServiceStatus.OK && placesResults[0])
+              ? placesResults[0].name
+              : formatted;
+            setBirthCenterName(name);
+            setBirthCenterAddress(name);
           }
         );
-      });
-
-      const hospitalName = places.length > 0 ? places[0].name : formattedAddress;
-
-      setHospitalAddress(hospitalName);
-
-    } catch (e) {
-      console.error("Error fetching hospital details:", e);
-      setHospitalAddress("Address not found");
-    }
+      }
+    });
   };
 
   const handleMapClick = (e) => {
     const loc = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-    setHospitalLocation(loc);
-    geocodeLatLng(loc);
+    setBirthCenterLocation(loc);
     setSelectedMarker(loc);
+    geocodeLatLng(loc);
   };
 
   const onLoad = (auto) => setAutocomplete(auto);
@@ -140,10 +128,16 @@ const Register = () => {
     if (!autocomplete) return console.log("Autocomplete not loaded");
     const place = autocomplete.getPlace();
     if (place.geometry) {
-      const loc = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-      setHospitalLocation(loc);
+      const loc = {
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      };
+      setBirthCenterLocation(loc);
       setSelectedMarker(loc);
-      setHospitalAddress(place.formatted_address || place.name);
+      // prefer the place's name:
+      const display = place.name || place.formatted_address;
+      setBirthCenterName(display);
+      setBirthCenterAddress(display);
     }
   };
 
@@ -160,28 +154,59 @@ const Register = () => {
   };
 
   const register = async () => {
-    if (password !== confirmPassword) return alert("Passwords do not match.");
-    if (!email || !password || !name || !specialty || !availableDays.length ||
-        !consultationHours.length || !platform.length || !contactInfo ||
-        !hospitalLocation || !hospitalAddress) {
-      return alert("Please fill all fields and select hospital location.");
+    if (password !== confirmPassword) {
+      return alert("Passwords do not match.");
     }
+    if (
+      !email || !password ||
+      !name || !specialty ||
+      !availableDays.length ||
+      !consultationHours.length ||
+      !platform.length ||
+      !contactInfo ||
+      !birthCenterLocation ||
+      !birthCenterAddress
+    ) {
+      return alert("Please fill all fields and select your birth center.");
+    }
+
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
       let photoUrl = "";
       if (profilePhotoFile) {
-        const snap = await uploadBytes(ref(storage, `profilePhotos/${user.uid}`), profilePhotoFile);
+        const snap = await uploadBytes(
+          ref(storage, `profilePhotos/${user.uid}`),
+          profilePhotoFile
+        );
         photoUrl = await getDownloadURL(snap.ref);
       }
-      const clinic = await findMatchingClinic(hospitalLocation);
-      if (!clinic) return alert("No matching clinic found near selected location.");
+
+      const clinic = await findMatchingClinicByName(birthCenterName);
+      if (!clinic) {
+        return alert("No clinic found with that name.");
+      }
+
       await setDoc(doc(db, "consultants", user.uid), {
-        userId: user.uid, email, name, specialty,
-        hospitalLocation, hospitalAddress,
-        availableDays, consultationHours, platform,
-        contactInfo, approvalStatus: "pending",
-        clinicId: clinic.id, profilePhoto: photoUrl
+        userId: user.uid,
+        email,
+        name,
+        specialty,
+        contactInfo,
+        profilePhoto: photoUrl,
+
+        // unified birth-center fields:
+        birthCenterName,
+        birthCenterAddress,
+        birthCenterLocation,
+
+        availableDays,
+        consultationHours,
+        platform,
+
+        approvalStatus: "pending",
+        clinicId: clinic.id,
       });
+
       alert("Registration successful! Await clinic approval.");
       navigate("/");
     } catch (e) {
@@ -197,17 +222,18 @@ const Register = () => {
         <Link to="/">
           <div className="flex items-center space-x-3">
             <img src={Logo} alt="NeoCare Logo" className="w-16 h-16" />
-            <span className="text-4xl font-extrabold font-mono text-[#DA79B9]">NeoCare</span>
+            <span className="text-4xl font-extrabold font-mono text-[#DA79B9]">
+              NeoCare
+            </span>
           </div>
         </Link>
       </div>
 
       {/* Main Container */}
       <div className="bg-white shadow-lg rounded-xl w-full max-w-5xl overflow-hidden md:flex">
-        {/* Left Side - Form */}
+        {/* Left Side – Form */}
         <div className="md:w-1/2 p-8 space-y-6">
           <h2 className="text-2xl font-bold text-gray-800">Register as a Consultant</h2>
-
           {/* Account Info */}
           <div className="space-y-4">
             <div>
@@ -243,7 +269,7 @@ const Register = () => {
               />
               {previewImage && (
                 <img src={previewImage} alt="Preview"
-                     className="mt-2 w-24 h-24 object-cover rounded-full border" />
+                  className="mt-2 w-24 h-24 object-cover rounded-full border" />
               )}
             </div>
           </div>
@@ -271,22 +297,23 @@ const Register = () => {
             <label className="block text-sm font-medium text-gray-800">Phone Number</label>
             <input
               type="text" placeholder="Enter Phone Number"
-              className="mt-1 block w-full rounded-xl border border-[#DA79B9] px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
-              onChange={e => setContactInfo(e.target.value)}
+                className="mt-1 block w-full rounded-xl border border-[#DA79B9] px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
+                onChange={e => setContactInfo(e.target.value)}
             />
           </div>
 
           <hr className="border-gray-200" />
           <h3 className="text-lg font-semibold text-gray-800">Consultation Details</h3>
-
           <div className="space-y-4">
+            {/* Available Days */}
             <div>
               <label className="block text-sm font-medium text-gray-800">Available Days</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {availableDaysOptions.map(day => (
                   <label key={day} className="flex items-center space-x-2">
                     <input
-                      type="checkbox" className="h-5 w-5 text-[#DA79B9] border-gray-300 rounded"
+                      type="checkbox"
+                      className="h-5 w-5 text-[#DA79B9] border-gray-300 rounded"
                       checked={availableDays.includes(day)}
                       onChange={() => toggleCheckbox(day, availableDays, setAvailableDays)}
                     />
@@ -295,13 +322,15 @@ const Register = () => {
                 ))}
               </div>
             </div>
+            {/* Consultation Hours */}
             <div>
               <label className="block text-sm font-medium text-gray-800">Consultation Hours</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {consultationHoursOptions.map(hour => (
                   <label key={hour} className="flex items-center space-x-2">
                     <input
-                      type="checkbox" className="h-5 w-5 text-[#DA79B9] border-gray-300 rounded"
+                      type="checkbox"
+                      className="h-5 w-5 text-[#DA79B9] border-gray-300 rounded"
                       checked={consultationHours.includes(hour)}
                       onChange={() => toggleCheckbox(hour, consultationHours, setConsultationHours)}
                     />
@@ -310,13 +339,15 @@ const Register = () => {
                 ))}
               </div>
             </div>
+            {/* Platform */}
             <div>
               <label className="block text-sm font-medium text-gray-800">Platform</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {platformOptions.map(opt => (
                   <label key={opt} className="flex items-center space-x-2">
                     <input
-                      type="checkbox" className="h-5 w-5 text-[#DA79B9] border-gray-300 rounded"
+                      type="checkbox"
+                      className="h-5 w-5 text-[#DA79B9] border-gray-300 rounded"
                       checked={platform.includes(opt)}
                       onChange={() => toggleCheckbox(opt, platform, setPlatform)}
                     />
@@ -340,46 +371,61 @@ const Register = () => {
           </p>
         </div>
 
-        {/* Right Side - Map Picker */}
+        {/* Right Side – Birth Center Map Picker */}
         <div className="md:w-1/2 border-t md:border-t-0 md:border-l border-gray-200 p-8">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Hospital Location</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Select Birth Center Location</h3>
+
           {isLoaded ? (
             <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
               <input
-                type="text" placeholder="Search for hospital location"
+                type="text"
+                placeholder="Search for birth center"
                 className="w-full mb-4 rounded-xl border border-[#DA79B9] px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
               />
             </Autocomplete>
-          ) : <p className="text-gray-800">Loading map...</p>}
+          ) : (
+            <p className="text-gray-800">Loading map...</p>
+          )}
+
           {isLoaded && (
             <GoogleMap
               mapContainerStyle={mapContainerStyle}
               zoom={12}
-              center={hospitalLocation || center}
+              center={birthCenterLocation || center}
               onClick={handleMapClick}
               options={{ styles: customMapStyles }}
             >
-              {hospitalLocation && (
-                <Marker position={hospitalLocation} onClick={() => setSelectedMarker(hospitalLocation)} />
+              {birthCenterLocation && (
+                <Marker
+                  position={birthCenterLocation}
+                  draggable
+                  onDragEnd={handleMapClick}
+                />
               )}
               {selectedMarker && (
-                <InfoWindow position={selectedMarker} onCloseClick={() => setSelectedMarker(null)}>
+                <InfoWindow
+                  position={selectedMarker}
+                  onCloseClick={() => setSelectedMarker(null)}
+                >
                   <div>
-                    <h4 className="font-medium text-gray-800">Hospital Address</h4>
-                    <p className="text-sm text-gray-800">{hospitalAddress}</p>
+                    <p className="font-medium">{birthCenterName}</p>
+                    <p className="text-sm">{birthCenterAddress}</p>
                   </div>
                 </InfoWindow>
               )}
             </GoogleMap>
           )}
-          {hospitalAddress && (
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-800">Selected Address</label>
-              <input
-                type="text" readOnly value={hospitalAddress}
-                className="mt-1 block w-full rounded-xl border border-[#DA79B9] px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#DA79B9]"
-              />
-            </div>
+
+          {/* Persistent display under map */}
+          {birthCenterName && (
+            <p className="mt-4 text-sm text-gray-700">
+              <strong>Selected Center:</strong> {birthCenterName}
+            </p>
+          )}
+          {birthCenterAddress && (
+            <p className="text-sm text-gray-700">
+              <strong>Address:</strong> {birthCenterAddress}
+            </p>
           )}
         </div>
       </div>
