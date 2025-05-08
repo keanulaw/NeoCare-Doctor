@@ -61,6 +61,12 @@ const AddConsultationNote = () => {
         throw new Error("You are not assigned to this client");
       }
 
+      // ─── grab the patient's auth-UID ─────────────────────────────────────
+      // assumes you have a `userId` field on your client docs;
+      // if you keyed the client doc by the user UID, you can just use `id`
+      const clientData = clientDoc.data();
+      const clientUserId = clientData.userId ?? id;
+
       // 3) Fetch this doctor's display name
       const profSnap = await getDoc(doc(db, "consultants", currentUser.uid));
       const consultantName = profSnap.exists()
@@ -69,11 +75,12 @@ const AddConsultationNote = () => {
 
       // 4) Create the note with embedded consultantName
       await addDoc(collection(db, "consultationNotes"), {
-        clientId: id,
-        consultantId: currentUser.uid,    // store consultant ID
-        consultantName,                   // ← new field
+        clientId:        id,
+        clientUserId,                      // ← NEW (must be non-undefined!)
+        consultantId:    currentUser.uid,
+        consultantName,
         ...formData,
-        createdAt: serverTimestamp(),     // server timestamp
+        createdAt:       serverTimestamp(),
       });
 
       navigate(`/clients/${id}`);
@@ -93,7 +100,7 @@ const AddConsultationNote = () => {
         
         <div className="w-full max-w-4xl space-y-8">
           {/* Maternal Health Section */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-[#DA79B9]">
             <h2 className="text-2xl font-semibold mb-4">Maternal Health</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -163,7 +170,7 @@ const AddConsultationNote = () => {
           </div>
 
           {/* Fetal Health Section */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-[#DA79B9]">
             <h2 className="text-2xl font-semibold mb-4">Fetal Health</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -241,7 +248,7 @@ const AddConsultationNote = () => {
           </div>
 
           {/* Assessment & Recommendations */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-[#DA79B9]">
             <h2 className="text-2xl font-semibold mb-4">Clinical Evaluation</h2>
             <div className="space-y-4">
               <div>
@@ -268,7 +275,7 @@ const AddConsultationNote = () => {
           <button
             onClick={handleAddNote}
             disabled={loading}
-            className="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600 w-full"
+            className="bg-[#DA79B9] text-white px-6 py-3 rounded w-full hover:bg-[#C064A0] transition"
           >
             {loading ? "Saving..." : "Save Prenatal Consultation"}
           </button>

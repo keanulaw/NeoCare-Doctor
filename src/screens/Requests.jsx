@@ -19,6 +19,8 @@ const Requests = () => {
   const [bookings, setBookings] = useState([]);
   const [busyId, setBusyId] = useState("");
   const [loading, setLoading] = useState(true);
+  // new: which filter tab is active
+  const [filter, setFilter] = useState("pending"); // "pending" | "upcoming" | "completed"
   const nav = useNavigate();
   const user = auth.currentUser;
 
@@ -28,25 +30,23 @@ const Requests = () => {
       return;
     }
 
+    // now fetch both pending and accepted, so we can slice them client-side
     const q = query(
       collection(db, "bookings"),
       where("doctorId", "==", user.uid),
-      where("status", "==", "pending")
+      where("status", "in", ["pending", "accepted"])
     );
 
     const unsub = onSnapshot(
       q,
       (snapshot) => {
         (async () => {
-          // 1) Map raw data, parse date
           const raw = snapshot.docs.map((snap) => {
             const data = snap.data();
             let jsDate = null;
-            // check for ANY .toDate() method (modular or compat)
             if (data.date && typeof data.date.toDate === "function") {
               jsDate = data.date.toDate();
             } else if (data.date) {
-              // maybe a plain string or number
               jsDate = new Date(data.date);
             }
 
@@ -54,20 +54,19 @@ const Requests = () => {
               id: snap.id,
               userId: data.userId,
               amount: data.amount,
-              // if you ever saved name on the booking itself:
-              userNameField: data.userName || data.clientName || null,
+              status: data.status,              // include status
+              fullName:
+                data.fullName || data.userName || data.clientName || null,
               date: jsDate,
-              rawDateValue: data.date, 
+              rawDateValue: data.date,
             };
           });
 
-          // 2) Figure out which UIDs still need lookup
           const toLookup = raw
-            .filter((b) => !b.userNameField)
+            .filter((b) => !b.fullName)
             .map((b) => b.userId);
           const unique = [...new Set(toLookup)];
 
-          // 3) Batch‐fetch those user docs
           const snapshots = await Promise.all(
             unique.map((uid) => getDoc(doc(db, "users", uid)))
           );
@@ -75,8 +74,8 @@ const Requests = () => {
           snapshots.forEach((uSnap) => {
             if (uSnap.exists()) {
               const u = uSnap.data();
-              // look for common patterns:
               nameMap[uSnap.id] =
+                u.fullName ||
                 u.name ||
                 [u.firstName, u.lastName].filter(Boolean).join(" ") ||
                 u.displayName ||
@@ -84,17 +83,10 @@ const Requests = () => {
             }
           });
 
-          // 4) Enrich each booking with final displayName
-          const enriched = raw.map((b) => {
-            let finalName =
-              b.userNameField ||
-              nameMap[b.userId] ||
-              b.userId; // fallback to id
-            return {
-              ...b,
-              displayName: finalName,
-            };
-          });
+          const enriched = raw.map((b) => ({
+            ...b,
+            fullName: b.fullName || nameMap[b.userId] || b.userId,
+          }));
 
           setBookings(enriched);
           setLoading(false);
@@ -115,20 +107,16 @@ const Requests = () => {
   const accept = async (id) => {
     setBusyId(id);
     try {
-      // 1) mark booking accepted
       await updateDoc(doc(db, "bookings", id), { status: "accepted" });
 
-      // 2) grab the booking so we can get userId and name
       const bookingSnap = await getDoc(doc(db, "bookings", id));
       if (bookingSnap.exists()) {
-        const { userId, userNameField } = bookingSnap.data();
-
-        // 3) upsert into clients collection with the same ID as the user
+        const { userId, fullName } = bookingSnap.data();
         await setDoc(
           doc(db, "clients", userId),
           {
-            fullName: userNameField || "",
-            consultantId: auth.currentUser.uid, // must match your Clients.jsx query
+            fullName: fullName || "",
+            consultantId: auth.currentUser.uid,
             status: "active",
             createdAt: serverTimestamp(),
           },
@@ -136,7 +124,7 @@ const Requests = () => {
         );
       }
 
-      alert("Booking accepted! Client added."); 
+      alert("Booking accepted! Client added.");
     } catch (e) {
       console.error("Accept error:", e);
       alert("Failed to accept—try again.");
@@ -178,20 +166,77 @@ const Requests = () => {
     );
   }
 
+  // new: filter the full list in memory
+  const now = new Date();
+  const filteredBookings = bookings.filter((b) => {
+    if (filter === "pending") {
+      return b.status === "pending";
+    }
+    if (filter === "upcoming") {
+      return b.status === "accepted" && b.date && b.date >= now;
+    }
+    if (filter === "completed") {
+      return b.status === "accepted" && b.date && b.date < now;
+    }
+    return false;
+  });
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
       <main className="flex-1 pt-20 px-6">
-        <h1 className="text-3xl font-bold mb-6">Pending Appointments</h1>
+        {/* filter tabs */}
+        <div className="flex gap-4 mb-4">
+          <button
+            onClick={() => setFilter("pending")}
+            className={`px-4 py-2 rounded ${
+              filter === "pending"
+                ? "bg-purple-500 text-white"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Appointment Requests
+          </button>
+          <button
+            onClick={() => setFilter("upcoming")}
+            className={`px-4 py-2 rounded ${
+              filter === "upcoming"
+                ? "bg-green-500 text-white"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Upcoming Appointments
+          </button>
+          <button
+            onClick={() => setFilter("completed")}
+            className={`px-4 py-2 rounded ${
+              filter === "completed"
+                ? "bg-blue-500 text-white"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Completed Appointments
+          </button>
+        </div>
+
+        {/* dynamic heading */}
+        <h1 className="text-3xl font-bold mb-6">
+          {filter === "pending"
+            ? "Pending Appointments"
+            : filter === "upcoming"
+            ? "Upcoming Appointments"
+            : "Completed Appointments"}
+        </h1>
+
         <section className="space-y-4">
-          {bookings.length > 0 ? (
-            bookings.map((b) => (
+          {filteredBookings.length > 0 ? (
+            filteredBookings.map((b) => (
               <div
                 key={b.id}
                 className="p-6 bg-white shadow-lg rounded-xl flex justify-between items-center border-l-4 border-purple-500 hover:shadow-xl transition-shadow"
               >
                 <div className="flex flex-col gap-1">
-                  <p className="font-semibold text-xl">{b.displayName}</p>
+                  <p className="font-semibold text-xl">{b.fullName}</p>
                   <p className="text-sm text-gray-500">({b.userId})</p>
                   <p className="text-sm text-gray-600">
                     {b.date
@@ -204,27 +249,34 @@ const Requests = () => {
                     ₱{(b.amount / 100).toFixed(2)}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => accept(b.id)}
-                    disabled={busyId === b.id}
-                    className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
-                  >
-                    {busyId === b.id ? "…" : "Accept"}
-                  </button>
-                  <button
-                    onClick={() => decline(b.id)}
-                    disabled={busyId === b.id}
-                    className="px-4 py-2 border border-red-600 text-red-600 rounded disabled:opacity-50"
-                  >
-                    {busyId === b.id ? "…" : "Decline"}
-                  </button>
-                </div>
+                {/* only show Accept/Decline on pending */}
+                {filter === "pending" && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => accept(b.id)}
+                      disabled={busyId === b.id}
+                      className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+                    >
+                      {busyId === b.id ? "…" : "Accept"}
+                    </button>
+                    <button
+                      onClick={() => decline(b.id)}
+                      disabled={busyId === b.id}
+                      className="px-4 py-2 border border-red-600 text-red-600 rounded disabled:opacity-50"
+                    >
+                      {busyId === b.id ? "…" : "Decline"}
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           ) : (
             <p className="text-center text-gray-600">
-              No pending appointments.
+              {filter === "pending"
+                ? "No pending appointments."
+                : filter === "upcoming"
+                ? "No upcoming appointments."
+                : "No completed appointments."}
             </p>
           )}
         </section>
