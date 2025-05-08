@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../configs/firebase-config";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Logo from "../assets/Logo.png";
 
@@ -15,7 +19,9 @@ const Login = () => {
       const { user } = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "consultants", user.uid));
       if (snap.exists() && snap.data().approvalStatus !== "accepted") {
-        alert("Your account is not yet approved. Please wait for clinic approval.");
+        alert(
+          "Your account is not yet approved. Please wait for clinic approval."
+        );
         await signOut(auth);
         return;
       }
@@ -26,9 +32,23 @@ const Login = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      alert("Please enter your email above before resetting your password.");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert("Password reset email sent! Please check your inbox.");
+    } catch (err) {
+      console.error("Password reset error:", err);
+      alert("Failed to send password reset email: " + err.message);
+    }
+  };
+
   return (
     <>
-      {/* uses the same white→pink gradient background as Register.jsx */}
       <div className="w-full min-h-screen flex flex-col items-center justify-start pt-16 bg-gradient-to-b from-white to-[#F2C2DE] p-4">
         {/* logo + title */}
         <div className="flex flex-col items-center text-center gap-3 w-[800px]">
@@ -84,16 +104,18 @@ const Login = () => {
           </button>
 
           <div className="w-full flex justify-end">
-            <Link className="font-medium text-sm font-mono underline text-[#DA79B9]">
+            <button
+              onClick={handleForgotPassword}
+              className="font-medium text-sm font-mono underline text-[#DA79B9] cursor-pointer"
+            >
               Forgot Password?
-            </Link>
+            </button>
           </div>
         </div>
 
         {/* footer links */}
         <div className="flex flex-col items-center gap-3 mt-6">
-          <span className="underline text-[#DA79B9]">Need Help?</span>
-          <span className="text-gray-800"> 
+          <span className="text-gray-800">
             Don't have an account?{" "}
             <Link to="/register" className="underline text-[#DA79B9]">
               Sign Up!

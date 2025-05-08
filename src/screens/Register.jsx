@@ -171,7 +171,10 @@ const Register = () => {
     }
 
     try {
+      // create auth user
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
+
+      // upload photo if any
       let photoUrl = "";
       if (profilePhotoFile) {
         const snap = await uploadBytes(
@@ -181,11 +184,16 @@ const Register = () => {
         photoUrl = await getDownloadURL(snap.ref);
       }
 
-      const clinic = await findMatchingClinicByName(birthCenterName);
+      // lookup clinic by name/address
+      const clinic = await findMatchingClinicByName(
+        birthCenterName,
+        birthCenterAddress
+      );
       if (!clinic) {
-        return alert("No clinic found with that name.");
+        return alert("No clinic found. Make sure your map selection matches a registered clinic.");
       }
 
+      // write consultant profile
       await setDoc(doc(db, "consultants", user.uid), {
         userId: user.uid,
         email,
@@ -193,16 +201,12 @@ const Register = () => {
         specialty,
         contactInfo,
         profilePhoto: photoUrl,
-
-        // unified birth-center fields:
         birthCenterName,
         birthCenterAddress,
         birthCenterLocation,
-
         availableDays,
         consultationHours,
         platform,
-
         approvalStatus: "pending",
         clinicId: clinic.id,
       });

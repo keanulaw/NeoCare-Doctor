@@ -121,9 +121,7 @@ const Clients = () => {
                     {c.fullName}
                   </h2>
                   <p className="text-sm text-gray-600">{c.email}</p>
-                  <p className="text-sm mt-1">
-                    <span className="font-medium">Status:</span> {c.status}
-                  </p>
+                  
                 </div>
 
                 {/* actions */}
