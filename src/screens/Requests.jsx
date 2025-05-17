@@ -222,7 +222,6 @@ const Requests = () => {
               >
                 <div className="flex flex-col gap-1">
                   <p className="font-semibold text-xl">{b.fullName}</p>
-                  <p className="text-sm text-gray-500">({b.userId})</p>
                   <p className="text-sm text-gray-600">
                     {b.date
                       ? fmtDate(b.date)
@@ -230,9 +229,7 @@ const Requests = () => {
                       ? new Date(b.rawDateValue).toLocaleString()
                       : "Date TBD"}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    ₱{(b.amount / 100).toFixed(2)}
-                  </p>
+                  
                 </div>
                 {filter === "pending" && (
                   <div className="flex gap-2">
