@@ -113,7 +113,7 @@ const Clients = () => {
             clients.map(c => (
               <div
                 key={c.id}
-                className="bg-white shadow-md rounded-lg p-6 flex justify-between items-start border-l-4 border-[#DA79B9]"
+                className="bg-white shadow-md rounded-lg p-6 flex justify-between i "
               >
                 {/* left column */}
                 <div>

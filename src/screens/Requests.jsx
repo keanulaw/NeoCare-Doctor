@@ -15,11 +15,12 @@ import {
 import { db, auth } from "../configs/firebase-config";
 import Header from "../components/Header";
 
+const API_BASE = "http://localhost:3000";
+
 const Requests = () => {
   const [bookings, setBookings] = useState([]);
   const [busyId, setBusyId] = useState("");
   const [loading, setLoading] = useState(true);
-  // new: which filter tab is active
   const [filter, setFilter] = useState("pending"); // "pending" | "upcoming" | "completed"
   const nav = useNavigate();
   const user = auth.currentUser;
@@ -30,7 +31,6 @@ const Requests = () => {
       return;
     }
 
-    // now fetch both pending and accepted, so we can slice them client-side
     const q = query(
       collection(db, "bookings"),
       where("doctorId", "==", user.uid),
@@ -54,7 +54,7 @@ const Requests = () => {
               id: snap.id,
               userId: data.userId,
               amount: data.amount,
-              status: data.status,              // include status
+              status: data.status,
               fullName:
                 data.fullName || data.userName || data.clientName || null,
               date: jsDate,
@@ -107,22 +107,10 @@ const Requests = () => {
   const accept = async (id) => {
     setBusyId(id);
     try {
-      await updateDoc(doc(db, "bookings", id), { status: "accepted" });
-
-      const bookingSnap = await getDoc(doc(db, "bookings", id));
-      if (bookingSnap.exists()) {
-        const { userId, fullName } = bookingSnap.data();
-        await setDoc(
-          doc(db, "clients", userId),
-          {
-            fullName: fullName || "",
-            consultantId: auth.currentUser.uid,
-            status: "active",
-            createdAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      }
+      const res = await fetch(`${API_BASE}/api/bookings/${id}/accept`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error(await res.text());
 
       alert("Booking accepted! Client added.");
     } catch (e) {
@@ -137,7 +125,11 @@ const Requests = () => {
     if (!window.confirm("Decline this booking?")) return;
     setBusyId(id);
     try {
-      await updateDoc(doc(db, "bookings", id), { status: "canceled" });
+      const res = await fetch(`${API_BASE}/api/bookings/${id}/accept`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error(await res.text());
+
       alert("Booking declined.");
     } catch (e) {
       console.error("Decline error:", e);
@@ -166,18 +158,11 @@ const Requests = () => {
     );
   }
 
-  // new: filter the full list in memory
   const now = new Date();
   const filteredBookings = bookings.filter((b) => {
-    if (filter === "pending") {
-      return b.status === "pending";
-    }
-    if (filter === "upcoming") {
-      return b.status === "accepted" && b.date && b.date >= now;
-    }
-    if (filter === "completed") {
-      return b.status === "accepted" && b.date && b.date < now;
-    }
+    if (filter === "pending") return b.status === "pending";
+    if (filter === "upcoming") return b.status === "accepted" && b.date >= now;
+    if (filter === "completed") return b.status === "accepted" && b.date < now;
     return false;
   });
 
@@ -191,7 +176,7 @@ const Requests = () => {
             onClick={() => setFilter("pending")}
             className={`px-4 py-2 rounded ${
               filter === "pending"
-                ? "bg-purple-500 text-white"
+                ? "bg-[#DA79B9] text-white"
                 : "bg-white text-gray-700"
             }`}
           >
@@ -201,7 +186,7 @@ const Requests = () => {
             onClick={() => setFilter("upcoming")}
             className={`px-4 py-2 rounded ${
               filter === "upcoming"
-                ? "bg-green-500 text-white"
+                ? "bg-[#DA79B9] text-white"
                 : "bg-white text-gray-700"
             }`}
           >
@@ -211,7 +196,7 @@ const Requests = () => {
             onClick={() => setFilter("completed")}
             className={`px-4 py-2 rounded ${
               filter === "completed"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#DA79B9] text-white"
                 : "bg-white text-gray-700"
             }`}
           >
@@ -233,7 +218,7 @@ const Requests = () => {
             filteredBookings.map((b) => (
               <div
                 key={b.id}
-                className="p-6 bg-white shadow-lg rounded-xl flex justify-between items-center border-l-4 border-purple-500 hover:shadow-xl transition-shadow"
+                className="p-6 bg-white shadow-lg rounded-xl flex justify-between items-center border-l-4 border-[#DA79B9] hover:shadow-xl transition-shadow"
               >
                 <div className="flex flex-col gap-1">
                   <p className="font-semibold text-xl">{b.fullName}</p>
@@ -249,20 +234,19 @@ const Requests = () => {
                     ₱{(b.amount / 100).toFixed(2)}
                   </p>
                 </div>
-                {/* only show Accept/Decline on pending */}
                 {filter === "pending" && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => accept(b.id)}
                       disabled={busyId === b.id}
-                      className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+                      className="px-4 py-2 bg-[#DA79B9] text-white rounded disabled:opacity-50"
                     >
                       {busyId === b.id ? "…" : "Accept"}
                     </button>
                     <button
                       onClick={() => decline(b.id)}
                       disabled={busyId === b.id}
-                      className="px-4 py-2 border border-red-600 text-red-600 rounded disabled:opacity-50"
+                      className="px-4 py-2 border border-[#DA79B9] text-[#DA79B9] rounded disabled:opacity-50"
                     >
                       {busyId === b.id ? "…" : "Decline"}
                     </button>
