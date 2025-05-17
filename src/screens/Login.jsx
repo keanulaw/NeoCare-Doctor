@@ -1,15 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../configs/firebase-config";
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Logo from "../assets/Logo.png";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import sendNotif from "../utils/sendNotif";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -34,6 +28,7 @@ const Login = () => {
 
   return (
     <>
+      {/* uses the same white→pink gradient background as Register.jsx */}
       <div className="w-full min-h-screen flex flex-col items-center justify-start pt-16 bg-gradient-to-b from-white to-[#F2C2DE] p-4">
         {/* logo + title */}
         <div className="flex flex-col items-center text-center gap-3 w-[800px]">
@@ -89,18 +84,16 @@ const Login = () => {
           </button>
 
           <div className="w-full flex justify-end">
-            <button
-              onClick={handleForgotPassword}
-              className="font-medium text-sm font-mono underline text-[#DA79B9] cursor-pointer"
-            >
+            <Link className="font-medium text-sm font-mono underline text-[#DA79B9]">
               Forgot Password?
-            </button>
+            </Link>
           </div>
         </div>
 
         {/* footer links */}
         <div className="flex flex-col items-center gap-3 mt-6">
-          <span className="text-gray-800">
+          <span className="underline text-[#DA79B9]">Need Help?</span>
+          <span className="text-gray-800"> 
             Don't have an account?{" "}
             <Link to="/register" className="underline text-[#DA79B9]">
               Sign Up!
