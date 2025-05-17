@@ -24,22 +24,22 @@ const Login = () => {
       return;
     }
 
-    // Fetch consultant bookings
-    const bookingRef = collection(db, "bookings");
-    const q = query(bookingRef, where("consultantId", "==", user.uid));
-    const bookingSnap = await getDocs(q);
-    const bookings = bookingSnap.docs.map((doc) => doc.data());
+    // // Fetch consultant bookings
+    // const bookingRef = collection(db, "bookings");
+    // const q = query(bookingRef, where("consultantId", "==", user.uid));
+    // const bookingSnap = await getDocs(q);
+    // const bookings = bookingSnap.docs.map((doc) => doc.data());
 
-    // Filter only pending bookings
-    const pendingBookings = bookings.filter((b) => b.status === "pending");
+    // // Filter only pending bookings
+    // const pendingBookings = bookings.filter((b) => b.status === "pending");
 
-    if (pendingBookings.length > 0) {
-      await sendNotif({
-        email: user.email,
-        name: user.name,
-        bookings: pendingBookings,
-      });
-    }
+    // if (pendingBookings.length > 0) {
+    //   await sendNotif({
+    //     email: user.email,
+    //     name: snap.data().name,
+    //     bookings: pendingBookings,
+    //   });
+    // }
 
     navigate("/landing");
   } catch (e) {

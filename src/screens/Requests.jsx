@@ -1,5 +1,5 @@
 // src/pages/Requests.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -8,12 +8,10 @@ import {
   onSnapshot,
   doc,
   getDoc,
-  updateDoc,
-  setDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "../configs/firebase-config";
 import Header from "../components/Header";
+import sendNotif from "../utils/sendNotif";
 
 const API_BASE = "http://localhost:3000";
 
@@ -21,9 +19,11 @@ const Requests = () => {
   const [bookings, setBookings] = useState([]);
   const [busyId, setBusyId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("pending"); // "pending" | "upcoming" | "completed"
+  const [filter, setFilter] = useState("pending");
   const nav = useNavigate();
   const user = auth.currentUser;
+
+  const notifiedBookingsRef = useRef(new Set());
 
   useEffect(() => {
     if (!user) {
@@ -59,6 +59,8 @@ const Requests = () => {
                 data.fullName || data.userName || data.clientName || null,
               date: jsDate,
               rawDateValue: data.date,
+              hour: data.hour,
+              platform: data.platform,
             };
           });
 
@@ -87,6 +89,25 @@ const Requests = () => {
             ...b,
             fullName: b.fullName || nameMap[b.userId] || b.userId,
           }));
+
+          // Send email for new pending bookings
+          const newPending = enriched.filter(
+            (b) => b.status === "pending" && !notifiedBookingsRef.current.has(b.id)
+          );
+
+          if (newPending.length > 0 && user?.email) {
+            const doctorSnap = await getDoc(doc(db, "consultants", user.uid));
+            if (doctorSnap.exists()) {
+              const doctor = doctorSnap.data();
+              await sendNotif({
+                email: user.email,
+                name: doctor.name,
+                bookings: newPending,
+              });
+
+              newPending.forEach((b) => notifiedBookingsRef.current.add(b.id));
+            }
+          }
 
           setBookings(enriched);
           setLoading(false);
