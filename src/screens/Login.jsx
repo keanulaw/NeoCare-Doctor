@@ -4,27 +4,50 @@ import { auth, db } from "../configs/firebase-config";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Logo from "../assets/Logo.png";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import sendNotif from "../utils/sendNotif";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const login = async () => {
-    try {
-      const { user } = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db, "consultants", user.uid));
-      if (snap.exists() && snap.data().approvalStatus !== "accepted") {
-        alert("Your account is not yet approved. Please wait for clinic approval.");
-        await signOut(auth);
-        return;
-      }
-      navigate("/landing");
-    } catch (e) {
-      console.error("Sign-in error:", e);
-      alert("Login failed: " + e.message);
+ const login = async () => {
+  try {
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+
+    // Check consultant approval
+    const snap = await getDoc(doc(db, "consultants", user.uid));
+    if (snap.exists() && snap.data().approvalStatus !== "accepted") {
+      alert("Your account is not yet approved. Please wait for clinic approval.");
+      await signOut(auth);
+      return;
     }
-  };
+
+    // Fetch consultant bookings
+    const bookingRef = collection(db, "bookings");
+    const q = query(bookingRef, where("consultantId", "==", user.uid));
+    const bookingSnap = await getDocs(q);
+    const bookings = bookingSnap.docs.map((doc) => doc.data());
+
+    // Filter only pending bookings
+    const pendingBookings = bookings.filter((b) => b.status === "pending");
+
+    if (pendingBookings.length > 0) {
+      await sendNotif({
+        email: user.email,
+        name: user.name,
+        bookings: pendingBookings,
+      });
+    }
+
+    navigate("/landing");
+  } catch (e) {
+    console.error("Sign-in error:", e);
+    alert("Login failed: " + e.message);
+  }
+};
+
 
   return (
     <>
