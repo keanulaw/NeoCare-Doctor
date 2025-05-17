@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { db, auth } from "../configs/firebase-config";
@@ -7,6 +7,16 @@ import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/fires
 const AddConsultationNote = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // ──────────── role detection ────────────
+  const [role, setRole] = useState(null);   // "doctor" | "staff"
+  useEffect(() => {
+    (async () => {
+      if (!auth.currentUser) return;
+      const prof = await getDoc(doc(db, "users", auth.currentUser.uid));
+      setRole(prof.exists() ? prof.data().role || "doctor" : "doctor");
+    })();
+  }, []);
 
   // Which form to show: null → picker, or "pregnancy"/"prenatal"/"emergency"
   const [consultationType, setConsultationType] = useState(null);
@@ -119,36 +129,68 @@ const AddConsultationNote = () => {
     }));
   };
 
-  // save note to Firestore
+  // ──────────── SAVE handler ────────────
   const handleAddNote = async () => {
+    if (!consultationType) return;
+
     setLoading(true);
     const user = auth.currentUser;
-    if (!user) {
-      alert("Please sign in");
-      setLoading(false);
-      return;
-    }
     try {
-      // verify client exists and consultant matches
-      const clientRef = doc(db, "clients", id);
-      const clientSnap = await getDoc(clientRef);
-      if (!clientSnap.exists() || clientSnap.data().consultantId !== user.uid) {
+      // security: ensure consultant owns the client
+      const cRef = doc(db, "clients", id);
+      const cSnap = await getDoc(cRef);
+      if (!cSnap.exists() || cSnap.data().consultantId !== user.uid) {
         throw new Error("Access denied");
       }
-      // fetch consultant name
-      const profSnap = await getDoc(doc(db, "consultants", user.uid));
-      const consultantName = profSnap.exists()
-        ? profSnap.data().name
-        : user.displayName || "Dr. Unknown";
 
-      // assemble payload
+      // build note body, stripping doctor-or-staff fields
+      let body = { ...formData[consultationType] };
+      if (role === "staff") {
+        // remove doctor fields
+        if (consultationType === "pregnancy") {
+          delete body.pregnancyAssessment;
+          delete body.pregnancyRecommendations;
+        } else if (consultationType === "prenatal") {
+          delete body.prenatalAssessment;
+          delete body.prenatalRecommendations;
+        } else {
+          delete body.emergencyAssessment;
+          delete body.emergencyRecommendations;
+        }
+      } else if (role === "doctor") {
+        // doctor saves only recommendation section
+        if (consultationType === "pregnancy") {
+          body = {
+            pregnancyAssessment: body.pregnancyAssessment,
+            pregnancyRecommendations: body.pregnancyRecommendations,
+          };
+        } else if (consultationType === "prenatal") {
+          body = {
+            prenatalAssessment: body.prenatalAssessment,
+            prenatalRecommendations: body.prenatalRecommendations,
+          };
+        } else {
+          body = {
+            emergencyAssessment: body.emergencyAssessment,
+            emergencyRecommendations: body.emergencyRecommendations,
+          };
+        }
+      }
+
+      // consultant display name
+      const profSnap = await getDoc(doc(db, "consultants", user.uid));
+      const consultantName =
+        profSnap.exists() ? profSnap.data().name : user.displayName || "Unknown";
+
+      // payload
       const payload = {
         clientId: id,
         consultantId: user.uid,
         consultantName,
+        role,                      // "doctor" | "staff"
         consultationType,
-        ...formData[consultationType],
-        createdAt: serverTimestamp()
+        ...body,
+        createdAt: serverTimestamp(),
       };
 
       await addDoc(collection(db, "consultationNotes"), payload);
@@ -169,6 +211,16 @@ const AddConsultationNote = () => {
       default: return "Add OB Consultation Note";
     }
   };
+
+  // ──────────── early loading / role guard ────────────
+  if (role === null)
+    return (
+      <div className="w-full h-screen flex justify-center items-center">
+        <p className="text-lg">Loading…</p>
+      </div>
+    );
+
+  const isStaff = role === "staff";
 
   return (
     <div className="w-auto overflow-y-auto relative">
@@ -412,48 +464,50 @@ const AddConsultationNote = () => {
             </div>
 
             {/* Assessment & Recommendations */}
-            <div className="bg-pink-50 border-l-4 border-pink-400 p-6 rounded shadow">
-              <label className="block font-semibold mb-2 text-pink-700">Assessment</label>
-              <textarea
-                className="border p-2 w-full rounded h-24 mb-4"
-                placeholder="Clinical summary..."
-                value={formData.pregnancy.pregnancyAssessment}
-                onChange={e =>
-                  setFormData(prev => ({
-                    ...prev,
-                    pregnancy: {
-                      ...prev.pregnancy,
-                      pregnancyAssessment: e.target.value
-                    }
-                  }))
-                }
-              />
+            {!isStaff && (
+              <div className="bg-pink-50 border-l-4 border-pink-400 p-6 rounded shadow">
+                <label className="block font-semibold mb-2 text-pink-700">Assessment</label>
+                <textarea
+                  className="border p-2 w-full rounded h-24 mb-4"
+                  placeholder="Clinical summary..."
+                  value={formData.pregnancy.pregnancyAssessment}
+                  onChange={e =>
+                    setFormData(prev => ({
+                      ...prev,
+                      pregnancy: {
+                        ...prev.pregnancy,
+                        pregnancyAssessment: e.target.value
+                      }
+                    }))
+                  }
+                />
 
-              <label className="block font-semibold mb-2 text-pink-700">Recommendations</label>
-              <textarea
-                className="border p-2 w-full rounded h-24 mb-2"
-                placeholder="Care plan & next steps..."
-                value={formData.pregnancy.pregnancyRecommendations}
-                onChange={e =>
-                  setFormData(prev => ({
-                    ...prev,
-                    pregnancy: {
-                      ...prev.pregnancy,
-                      pregnancyRecommendations: e.target.value
-                    }
-                  }))
-                }
-              />
+                <label className="block font-semibold mb-2 text-pink-700">Recommendations</label>
+                <textarea
+                  className="border p-2 w-full rounded h-24 mb-2"
+                  placeholder="Care plan & next steps..."
+                  value={formData.pregnancy.pregnancyRecommendations}
+                  onChange={e =>
+                    setFormData(prev => ({
+                      ...prev,
+                      pregnancy: {
+                        ...prev.pregnancy,
+                        pregnancyRecommendations: e.target.value
+                      }
+                    }))
+                  }
+                />
 
-              <div className="mt-4 text-center">
-                <button
-                  onClick={() => setConsultationType(null)}
-                  className="bg-pink-400 text-white px-100 py-2 rounded hover:bg-pink-500 transition"
-                >
-                  Back
-                </button>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setConsultationType(null)}
+                    className="bg-pink-400 text-white px-100 py-2 rounded hover:bg-pink-500 transition"
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -705,48 +759,50 @@ const AddConsultationNote = () => {
         </div>
 
         {/* ─── Assessment & Recommendations Card ─── */}
-        <div className="bg-pink-50 border-l-4 border-pink-400 p-6 rounded shadow">
-          <label className="block font-semibold mb-2 text-pink-700">Assessment</label>
-          <textarea
-            className="border p-2 w-full rounded h-24 mb-4"
-            placeholder="Clinical summary..."
-            value={formData.prenatal.prenatalAssessment}
-            onChange={e =>
-              setFormData(prev => ({
-                ...prev,
-                prenatal: {
-                  ...prev.prenatal,
-                  prenatalAssessment: e.target.value
-                }
-              }))
-            }
-          />
+        {!isStaff && (
+          <div className="bg-pink-50 border-l-4 border-pink-400 p-6 rounded shadow">
+            <label className="block font-semibold mb-2 text-pink-700">Assessment</label>
+            <textarea
+              className="border p-2 w-full rounded h-24 mb-4"
+              placeholder="Clinical summary..."
+              value={formData.prenatal.prenatalAssessment}
+              onChange={e =>
+                setFormData(prev => ({
+                  ...prev,
+                  prenatal: {
+                    ...prev.prenatal,
+                    prenatalAssessment: e.target.value
+                  }
+                }))
+              }
+            />
 
-          <label className="block font-semibold mb-2 text-pink-700">Recommendations</label>
-          <textarea
-            className="border p-2 w-full rounded h-24"
-            placeholder="Care plan & next steps..."
-            value={formData.prenatal.prenatalRecommendations}
-            onChange={e =>
-              setFormData(prev => ({
-                ...prev,
-                prenatal: {
-                  ...prev.prenatal,
-                  prenatalRecommendations: e.target.value
-                }
-              }))
-            }
-          />
-          {/* ─── Back Button ─── */}
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => setConsultationType(null)}
-              className="bg-pink-400 text-white px-100 py-2 rounded hover:bg-pink-500 transition"
-            >
-            Back
-          </button>
-        </div>
-        </div>
+            <label className="block font-semibold mb-2 text-pink-700">Recommendations</label>
+            <textarea
+              className="border p-2 w-full rounded h-24"
+              placeholder="Care plan & next steps..."
+              value={formData.prenatal.prenatalRecommendations}
+              onChange={e =>
+                setFormData(prev => ({
+                  ...prev,
+                  prenatal: {
+                    ...prev.prenatal,
+                    prenatalRecommendations: e.target.value
+                  }
+                }))
+              }
+            />
+            {/* ─── Back Button ─── */}
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setConsultationType(null)}
+                className="bg-pink-400 text-white px-100 py-2 rounded hover:bg-pink-500 transition"
+              >
+              Back
+            </button>
+          </div>
+          </div>
+        )}
       </div>
     )}
 
@@ -1008,7 +1064,7 @@ const AddConsultationNote = () => {
     )}
 
     {/* ─── Assessment & Recommendations ─── */}
-    {emergencyReason && (
+    {!isStaff && (
       <div className="bg-pink-50 border-l-4 border-pink-400 p-6 rounded shadow mb-6">
         <h3 className="text-pink-700 font-semibold mb-4">
           Assessment &amp; Recommendations
