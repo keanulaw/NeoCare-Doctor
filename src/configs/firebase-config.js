@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// ✅ Your Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyD-v_mJdtVPXtHzZDabFUsKKOI_B_zrrdA",
   authDomain: "neocare-2434d.firebaseapp.com",
@@ -12,17 +13,21 @@ const firebaseConfig = {
   measurementId: "G-BNZ2F5S6S4",
 };
 
+// ✅ Initialize Firebase app
 const app = initializeApp(firebaseConfig);
+
+// ✅ Initialize services
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Set persistence to local
+// ✅ Set persistence across reloads
 setPersistence(auth, browserLocalPersistence)
   .then(() => {
     console.log("Auth persistence set to local");
   })
   .catch((error) => {
-    console.error("Error setting persistence:", error);
+    console.error("Error setting auth persistence:", error);
   });
 
+// ✅ Export for app-wide use
 export { auth, db };

@@ -8,6 +8,8 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Logo from "../assets/Logo.png";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import sendNotif from "../utils/sendNotif";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -19,9 +21,7 @@ const Login = () => {
       const { user } = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, "consultants", user.uid));
       if (snap.exists() && snap.data().approvalStatus !== "accepted") {
-        alert(
-          "Your account is not yet approved. Please wait for clinic approval."
-        );
+        alert("Your account is not yet approved. Please wait for clinic approval.");
         await signOut(auth);
         return;
       }
@@ -29,21 +29,6 @@ const Login = () => {
     } catch (e) {
       console.error("Sign-in error:", e);
       alert("Login failed: " + e.message);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) {
-      alert("Please enter your email above before resetting your password.");
-      return;
-    }
-
-    try {
-      await sendPasswordResetEmail(auth, email);
-      alert("Password reset email sent! Please check your inbox.");
-    } catch (err) {
-      console.error("Password reset error:", err);
-      alert("Failed to send password reset email: " + err.message);
     }
   };
 

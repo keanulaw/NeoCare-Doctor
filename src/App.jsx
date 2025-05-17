@@ -8,58 +8,63 @@ import {
 import "./App.css";
 
 /* screens */
-import LandingPage         from "./screens/LandingPage";
-import Dashboard           from "./screens/Dashboard";
-import Forum               from "./screens/Forum";
-import Login               from "./screens/Login";
-import Register            from "./screens/Register";
-import Requests            from "./screens/Requests";
-import Clients             from "./screens/Clients";
-import ChatPage            from "./screens/ChatPage";
-import ChatComponent       from "./components/ChatComponent";
+import LandingPage from "./screens/LandingPage";
+import Dashboard from "./screens/Dashboard";
+import Forum from "./screens/Forum";
+import Login from "./screens/Login";
+import Register from "./screens/Register";
+import Requests from "./screens/Requests";
+import Clients from "./screens/Clients";
+import ChatPage from "./screens/ChatPage";
+import ChatComponent from "./components/ChatComponent";
 import AddConsultationNote from "./screens/AddConsultationNote";
-import ClientDetails       from "./screens/ClientDetails";
-import Profile             from "./screens/Profile";      // ← NEW
+import ClientDetails from "./screens/ClientDetails";
+import Profile from "./screens/Profile";
 
 /* firebase */
 import { auth } from "./configs/firebase-config";
 
-/* optional: global header */
-/* import Header from "./components/Header"; */
-
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(setCurrentUser);
-    return unsub;
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user);
+      setAuthReady(true);
+    });
+    return unsubscribe;
   }, []);
 
-  /* helper to protect routes */
-  const Private = (child) =>
-    currentUser ? child : <Navigate to="/" replace />;
+  const PrivateRoute = ({ children }) => {
+    return currentUser ? children : <Navigate to="/" replace />;
+  };
+
+  if (!authReady) {
+    return <div className="loading-screen">Checking authentication...</div>;
+  }
 
   return (
     <Router>
-      {/* <Header /> */}{/* ← uncomment if you want one global header */}
       <Routes>
-        {/* public */}
-        <Route path="/"           element={<Login />} />
-        <Route path="/register"   element={<Register />} />
+        {/* Public routes */}
+        <Route path="/" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-        {/* un‑protected (but normally reached after login) */}
-        <Route path="/landing"    element={<LandingPage />} />
-        <Route path="/dashboard"  element={<Dashboard />} />
-        <Route path="/forum"      element={<Forum />} />
-        <Route path="/requests"   element={<Requests />} />
-        <Route path="/clients"    element={<Clients />} />
-        <Route path="/clients/add-consultation-note/:id" element={<AddConsultationNote />} />
-        <Route path="/clients/:id"                        element={<ClientDetails />} />
+        {/* Protected routes */}
+        <Route path="/landing" element={<PrivateRoute><LandingPage /></PrivateRoute>} />
+        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/forum" element={<PrivateRoute><Forum /></PrivateRoute>} />
+        <Route path="/requests" element={<PrivateRoute><Requests /></PrivateRoute>} />
+        <Route path="/clients" element={<PrivateRoute><Clients /></PrivateRoute>} />
+        <Route path="/clients/add-consultation-note/:id" element={<PrivateRoute><AddConsultationNote /></PrivateRoute>} />
+        <Route path="/clients/:id" element={<PrivateRoute><ClientDetails /></PrivateRoute>} />
+        <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+        <Route path="/chat/:chatId" element={<PrivateRoute><ChatComponent /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
 
-        {/* protected routes */}
-        <Route path="/chat"        element={Private(<ChatPage />)} />
-        <Route path="/chat/:chatId"element={Private(<ChatComponent />)} />
-        <Route path="/profile"     element={Private(<Profile />)} /> {/* ← NEW */}
+        {/* Catch-all fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
