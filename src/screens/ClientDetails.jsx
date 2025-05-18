@@ -1,3 +1,5 @@
+// src/screens/ClientDetails.jsx
+
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getAuth } from "firebase/auth";
@@ -17,10 +19,11 @@ const ClientDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [client, setClient] = useState(null);
-  const [notes, setNotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState("all"); // "all" | "pregnancy" | "prenatal" | "emergency"
+  const [client, setClient]       = useState(null);
+  const [notes, setNotes]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [filterType, setFilterType] = useState("all");
+  const [role, setRole]           = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -32,7 +35,25 @@ const ClientDetails = () => {
           return;
         }
 
-        // fetch client
+        // 1️⃣ Load the signed-in user’s profile to get role & consultantId
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+
+        let detectedRole, allowedConsultantId;
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          detectedRole = data.role;
+          // staff users see clients of their assigned consultant
+          allowedConsultantId =
+            data.role === "staff" ? data.consultantId : user.uid;
+        } else {
+          // fallback: they might only exist under "consultants"
+          detectedRole = "consultant";
+          allowedConsultantId = user.uid;
+        }
+        setRole(detectedRole);
+
+        // 2️⃣ Fetch the client record
         const clientRef = doc(db, "clients", id);
         const clientSnap = await getDoc(clientRef);
         if (!clientSnap.exists()) {
@@ -40,13 +61,15 @@ const ClientDetails = () => {
           return;
         }
         const clientData = clientSnap.data();
-        if (clientData.consultantId !== user.uid) {
+
+        // 3️⃣ Ensure access: client.consultantId must match
+        if (clientData.consultantId !== allowedConsultantId) {
           navigate("/clients");
           return;
         }
         setClient(clientData);
 
-        // fetch notes
+        // 4️⃣ Fetch this client’s notes/history
         const notesQuery = query(
           collection(db, "consultationNotes"),
           where("clientId", "==", id),
@@ -55,11 +78,13 @@ const ClientDetails = () => {
         const snapshot = await getDocs(notesQuery);
         setNotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (e) {
-        console.error("Error:", e);
+        console.error("Error loading client details:", e);
+        navigate("/clients");
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, [id, navigate]);
 
@@ -68,18 +93,28 @@ const ClientDetails = () => {
       <div className="w-auto overflow-y-auto relative">
         <Header />
         <div className="pt-24 w-full h-screen flex justify-center items-center bg-[#F5EFE8]">
-          <div className="text-xl text-gray-600">Loading client details...</div>
+          <div className="text-xl text-gray-600">
+            Loading client details...
+          </div>
         </div>
       </div>
     );
   }
-  if (!client) return null;
 
-  const filtered = filterType === "all" ? notes : notes.filter(n => n.consultationType === filterType);
+  if (!client) {
+    return null;
+  }
+
+  const filtered =
+    filterType === "all"
+      ? notes
+      : notes.filter(n => n.consultationType === filterType);
 
   const renderSection = (title, dataObj) => {
     if (!dataObj) return null;
-    const entries = Object.entries(dataObj).filter(([_, v]) => v !== undefined && v !== null && v !== "");
+    const entries = Object.entries(dataObj).filter(
+      ([_, v]) => v !== undefined && v !== null && v !== ""
+    );
     if (entries.length === 0) return null;
     return (
       <div className="mt-4">
@@ -121,7 +156,9 @@ const ClientDetails = () => {
                       : "bg-white text-[#DA79B9] border border-[#DA79B9]"
                   }`}
                 >
-                  {type === "all" ? "All" : type.charAt(0).toUpperCase() + type.slice(1)}
+                  {type === "all"
+                    ? "All"
+                    : type.charAt(0).toUpperCase() + type.slice(1)}
                 </button>
               ))}
             </div>
@@ -133,13 +170,19 @@ const ClientDetails = () => {
                   type === "unknown"
                     ? "Unknown"
                     : type.charAt(0).toUpperCase() + type.slice(1);
-                const assessment = note[`${type}Assessment`] ?? note.assessment;
-                const recommendations = note[`${type}Recommendations`] ?? note.recommendations;
+                const assessment =
+                  note[`${type}Assessment`] ?? note.assessment;
+                const recommendations =
+                  note[`${type}Recommendations`] ?? note.recommendations;
 
                 return (
                   <div key={note.id} className="border-b border-gray-200 py-4">
-                    <p><strong>Type:</strong> {typeLabel}</p>
-                    <p><strong>Consultant:</strong> {note.consultantName}</p>
+                    <p>
+                      <strong>Type:</strong> {typeLabel}
+                    </p>
+                    <p>
+                      <strong>Consultant:</strong> {note.consultantName}
+                    </p>
 
                     {type === "pregnancy" && (
                       <>
@@ -163,16 +206,20 @@ const ClientDetails = () => {
                         {renderSection("Type & Screen", note.typeAndScreen)}
                         {renderSection("Blood Cultures & Ultrasound", {
                           "Blood Cultures Drawn": note.bloodCultures,
-                          "Ultrasound Findings": note.ultrasoundFindings
+                          "Ultrasound Findings": note.ultrasoundFindings,
                         })}
                       </>
                     )}
 
                     {assessment && (
-                      <p className="mt-4"><strong>Assessment:</strong> {assessment}</p>
+                      <p className="mt-4">
+                        <strong>Assessment:</strong> {assessment}
+                      </p>
                     )}
                     {recommendations && (
-                      <p><strong>Recommendations:</strong> {recommendations}</p>
+                      <p>
+                        <strong>Recommendations:</strong> {recommendations}
+                      </p>
                     )}
 
                     <p className="text-sm text-gray-500 mt-2">
@@ -183,7 +230,9 @@ const ClientDetails = () => {
                 );
               })
             ) : (
-              <div className="text-gray-600">No "{filterType}" history found.</div>
+              <div className="text-gray-600">
+                No &quot;{filterType}&quot; history found.
+              </div>
             )}
           </div>
         ) : (
