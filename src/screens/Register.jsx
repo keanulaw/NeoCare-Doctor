@@ -1,16 +1,20 @@
 // src/screens/Register.jsx
+
 import React, { useState, useRef, useEffect } from "react";
 import Logo from "../assets/Logo.png";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, db } from "../configs/firebase-config";
-import { createUserWithEmailAndPassword, deleteUser } from "firebase/auth";
 import {
-  collection,
+  createUserWithEmailAndPassword,
+  deleteUser
+} from "firebase/auth";
+import {
   doc,
+  setDoc,
+  collection,
   query,
   where,
   getDocs,
-  setDoc,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -22,19 +26,20 @@ import {
   GoogleMap,
   Marker,
   InfoWindow,
+  Autocomplete,
   useLoadScript,
 } from "@react-google-maps/api";
 
-/* ───────────────── constants ───────────────── */
+/** ───── constants ───── **/
 const MAP_LIBRARIES = ["places"];
 const mapContainerStyle = { width: "100%", height: "300px" };
 const defaultCenter = { lat: 10.3157, lng: 123.8854 };
 const customMapStyles = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#193341" }] },
   { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#2c5a71" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#29768a" }, { lightness: 0 }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#406d80" }] },
-  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#406d80" }] },
+  { featureType: "road",   elementType: "geometry", stylers: [{ color: "#29768a" }, { lightness: 0 }] },
+  { featureType: "poi",    elementType: "geometry", stylers: [{ color: "#406d80" }] },
+  { featureType: "transit",elementType: "geometry", stylers: [{ color: "#406d80" }] },
   {
     elementType: "labels.text.stroke",
     stylers: [{ visibility: "on" }, { color: "#3e606f" }, { weight: 2 }, { gamma: 0.84 }],
@@ -48,176 +53,210 @@ const HOURS = [
   "2:00 PM to 3:00 PM","3:00 PM to 4:00 PM","4:00 PM to 5:00 PM",
 ];
 const PLATFORMS = ["In-person","Online"];
+const norm = e => e.trim().toLowerCase();
 const toggle = (v, arr, setArr) =>
   setArr(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]);
 
-/* helper – case-insensitive email */
-const norm = (e) => e.trim().toLowerCase();
+/** ───── clinic lookup ───── **/
+async function findClinicByName(name) {
+  const q = query(
+    collection(db, "users"),
+    where("role", "==", "clinic"),
+    where("birthCenterName", "==", name)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() };
+}
 
-/* ───────────────── component ───────────────── */
+/** ───── geocode helper ───── **/
+function geocodeLatLng(latLng, setName, setAddr) {
+  if (!window.google?.maps) return;
+  const geocoder = new window.google.maps.Geocoder();
+  const places   = new window.google.maps.places.PlacesService(document.createElement("div"));
+  geocoder.geocode({ location: latLng }, (res, st) => {
+    if (st !== "OK" || !res[0]) return;
+    const formatted = res[0].formatted_address;
+    places.nearbySearch(
+      { location: latLng, radius: 500, type: "hospital" },
+      (r2, st2) => {
+        const name = (st2 === window.google.maps.places.PlacesServiceStatus.OK && r2[0])
+          ? r2[0].name
+          : formatted;
+        setName(name);
+        setAddr(formatted);
+      }
+    );
+  });
+}
+
 export default function Register() {
-  const nav      = useNavigate();
-  const storage  = getStorage();
+  const nav     = useNavigate();
+  const storage = getStorage();
 
-  /* shared */
-  const [role, setRole]     = useState("consultant");  // "consultant" | "staff"
-  const [email, setEmail]   = useState("");
-  const [pwd,   setPwd]     = useState("");
-  const [pwd2,  setPwd2]    = useState("");
+  /** shared **/
+  const [role, setRole]   = useState("consultant"); // or "staff"
+  const [email, setEmail] = useState("");
+  const [pwd, setPwd]     = useState("");
+  const [pwd2, setPwd2]   = useState("");
 
-  /* staff */
-  const [first,setFirst]    = useState("");
-  const [last, setLast]     = useState("");
-  const [docEmail,setDocEmail]=useState("");
+  /** staff **/
+  const [first, setFirst]      = useState("");
+  const [last, setLast]        = useState("");
+  const [docEmail, setDocEmail]= useState("");
 
-  /* consultant */
-  const [name,setName]      = useState("");
-  const [spec,setSpec]      = useState("");
-  const [phone,setPhone]    = useState("");
-  const [photo,setPhoto]    = useState(null);
-  const [preview,setPreview]= useState(null);
-  const [days,setDays]      = useState([]);
-  const [hours,setHours]    = useState([]);
-  const [plat,setPlat]      = useState([]);
+  /** consultant **/
+  const [consultFirstName, setConsultFirstName] = useState("");
+  const [consultLastName,  setConsultLastName]  = useState("");
+  const [spec, setSpec]     = useState("");
+  const [phone, setPhone]   = useState("");
+  const [photo, setPhoto]   = useState(null);
+  const [preview, setPreview]= useState(null);
+  const [days, setDays]     = useState([]);
+  const [hours, setHours]   = useState([]);
+  const [plat, setPlat]     = useState([]);
 
-  /* map & autocomplete */
+  /** map & autocomplete **/
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey:"AIzaSyBcJDGxtpPyKTJaH8VsPdWq3RkohUNkfd4",
+    googleMapsApiKey: "AIzaSyBcJDGxtpPyKTJaH8VsPdWq3RkohUNkfd4",
     libraries: MAP_LIBRARIES,
   });
-  const acRef = useRef(null);
-  useEffect(() => { if (isLoaded && !acRef.current) {
-      acRef.current = new window.google.maps.places.AutocompleteService();
-  }}, [isLoaded]);
+  const [autocomplete, setAutocomplete] = useState(null);
+  const [marker, setMarker]             = useState(null);
+  const [centerMap, setCenterMap]       = useState(defaultCenter);
+  const [cName, setCName]               = useState("");
+  const [cAddr, setCAddr]               = useState("");
 
-  const [search,setSearch]  = useState("");
-  const [pred ,setPred]     = useState([]);
-  const [loc  ,setLoc]      = useState(null);
-  const [cName,setCName]    = useState("");
-  const [cAddr,setCAddr]    = useState("");
-  const [marker,setMarker]  = useState(null);
-
-  const onSearch = (e)=>{
-    const v=e.target.value; setSearch(v);
-    if(!acRef.current||!v) return setPred([]);
-    acRef.current.getPlacePredictions(
-      {input:v, types:["establishment"]},
-      (r,st)=>setPred(st===window.google.maps.places.PlacesServiceStatus.OK?r:[])
-    );
-  };
-  const pickPred = (p)=>{
-    setSearch(p.description); setPred([]);
-    const g = new window.google.maps.Geocoder();
-    g.geocode({address:p.description},(res,st)=>{
-      if(st!=="OK"||!res?.length) return;
-      const l={lat:res[0].geometry.location.lat(), lng:res[0].geometry.location.lng()};
-      setLoc(l); setMarker(l); setCName(p.description); setCAddr(p.description);
-    });
-  };
-  const onPhoto = (e)=>{
-    const f=e.target.files?.[0];
-    if(f){ setPhoto(f); setPreview(URL.createObjectURL(f)); }
+  const onLoadAuto = auto => setAutocomplete(auto);
+  const onPlaceChanged = () => {
+    if (!autocomplete) return;
+    const place = autocomplete.getPlace();
+    if (place.geometry) {
+      const loc = {
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng()
+      };
+      setCenterMap(loc);
+      setMarker(loc);
+      setCName(place.name || place.formatted_address);
+      setCAddr(place.formatted_address);
+    }
   };
 
-  /* clinic lookup */
-  const clinicByName = async (name)=>{
-    const q=query(collection(db,"users"),
-      where("role","==","clinic"),
-      where("birthCenterName","==",name));
-    const s=await getDocs(q);
-    return s.empty?null:{id:s.docs[0].id};
+  const handleMapClick = e => {
+    const loc = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+    setCenterMap(loc);
+    setMarker(loc);
+    geocodeLatLng(loc, setCName, setCAddr);
   };
 
-  /* ───── submit ───── */
-  const submit = async ()=>{
-    if(pwd!==pwd2) return alert("Passwords don’t match.");
+  const onPhoto = e => {
+    const f = e.target.files?.[0];
+    if (f) {
+      setPhoto(f);
+      setPreview(URL.createObjectURL(f));
+    }
+  };
 
-    /* ===== STAFF ===== */
-    if(role==="staff"){
-      if(!first||!last||!email||!docEmail)
+  /** ───── submit ───── **/
+  const submit = async () => {
+    if (pwd !== pwd2) return alert("Passwords don't match.");
+
+    /** STAFF **/
+    if (role === "staff") {
+      if (!first || !last || !email || !docEmail) {
         return alert("Please fill every field.");
-
+      }
       let cred;
       try {
-        cred = await createUserWithEmailAndPassword(auth,email,pwd);
+        cred = await createUserWithEmailAndPassword(auth, email, pwd);
       } catch (e) {
         console.error(e);
         return alert(e.message);
       }
-
-      // 1) Try lookup by emailLower first…
+      // lookup consultant by emailLower || email
       let snap = await getDocs(
-        query(collection(db,"consultants"),
-              where("emailLower","==",norm(docEmail)))
+        query(collection(db, "consultants"),
+              where("emailLower", "==", norm(docEmail)))
       );
-      // 2) Fallback: lookup by raw email
       if (snap.empty) {
         snap = await getDocs(
-          query(collection(db,"consultants"),
-                where("email","==",docEmail.trim()))
+          query(collection(db, "consultants"),
+                where("email", "==", docEmail.trim()))
         );
       }
-
       if (snap.empty) {
-        try { await deleteUser(cred.user); } catch {}
+        await deleteUser(cred.user).catch(()=>{});
         return alert("Consultant e-mail not found.");
       }
       const consultantId = snap.docs[0].id;
-
-      await setDoc(doc(db,"users",cred.user.uid),{
-        firstName:   first,
-        lastName:    last,
-        email:       email.trim(),
-        emailLower:  norm(email),
-        role:        "staff",
+      await setDoc(doc(db, "users", cred.user.uid), {
+        firstName:  first,
+        lastName:   last,
+        email:      email.trim(),
+        emailLower: norm(email),
+        role:       "staff",
         consultantId,
-        createdAt:   new Date(),
+        createdAt:  new Date(),
       });
-
       alert("Medical-staff account created!");
       return nav("/");
     }
 
-    /* ===== CONSULTANT ===== */
-    if(!email||!name||!spec||!phone||!days.length||!hours.length||!plat.length||!loc)
+    /** CONSULTANT **/
+    const fullName = `${consultFirstName.trim()} ${consultLastName.trim()}`;
+    if (!email || !consultFirstName || !consultLastName || !spec || !phone || !days.length || !hours.length || !plat.length || !marker) {
       return alert("Please complete all consultant fields.");
+    }
+    let cred;
+    try {
+      cred = await createUserWithEmailAndPassword(auth, email, pwd);
+    } catch (e) {
+      console.error(e);
+      return alert(e.message);
+    }
+    const { user } = cred;
 
-    const { user } = await createUserWithEmailAndPassword(auth,email,pwd);
-
-    // upload optional photo
+    // photo upload
     let photoURL = "";
-    if(photo){
+    if (photo) {
       const up = await uploadBytes(
-        storageRef(storage,`profilePhotos/${user.uid}`), photo
+        storageRef(storage, `profilePhotos/${user.uid}`),
+        photo
       );
       photoURL = await getDownloadURL(up.ref);
     }
 
-    const clinic = await clinicByName(cName);
-    if(!clinic) return alert("No clinic found with that name.");
+    // find clinic
+    const clinic = await findClinicByName(cName);
+    if (!clinic) {
+      await deleteUser(user).catch(()=>{});
+      return alert("No clinic found with that name.");
+    }
 
-    await setDoc(doc(db,"consultants",user.uid),{
+    // write consultant doc
+    await setDoc(doc(db, "consultants", user.uid), {
       userId:             user.uid,
       email:              email.trim(),
       emailLower:         norm(email),
-      name,
+      name:               fullName,
       specialty:          spec,
       contactInfo:        phone,
       profilePhoto:       photoURL,
       birthCenterName:    cName,
       birthCenterAddress: cAddr,
-      birthCenterLocation:loc,
+      birthCenterLocation:marker,
       availableDays:      days,
       consultationHours:  hours,
       platform:           plat,
       approvalStatus:     "pending",
       clinicId:           clinic.id,
     });
-
-    await setDoc(doc(db,"users",user.uid),{
+    // write user doc
+    await setDoc(doc(db, "users", user.uid), {
       email:      email.trim(),
       emailLower: norm(email),
-      name,
+      name:       fullName,
       role:       "consultant",
       specialty:  spec,
       clinicId:   clinic.id,
@@ -228,27 +267,27 @@ export default function Register() {
     nav("/");
   };
 
-  if(loadError) return <p>Error loading maps</p>;
+  if (loadError) return <p>Error loading maps</p>;
 
   return (
     <div className="w-full min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-[#F2C2DE] p-4">
-      {/* header */}
+      {/* Logo */}
       <Link to="/" className="mb-8 flex items-center space-x-3">
         <img src={Logo} alt="NeoCare" className="w-16 h-16"/>
         <span className="text-4xl font-extrabold font-mono text-[#DA79B9]">NeoCare</span>
       </Link>
 
-      {/* role select */}
+      {/* Role selector */}
       <div className="bg-white shadow-lg rounded-xl w-full max-w-md p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Register as</h2>
         <div className="flex space-x-6">
-          {["consultant","staff"].map(r=>(
+          {["consultant","staff"].map(r => (
             <label key={r} className="flex items-center space-x-2">
               <input
                 type="radio"
                 className="h-5 w-5 text-[#DA79B9]"
-                checked={role===r}
-                onChange={()=>setRole(r)}
+                checked={role === r}
+                onChange={() => setRole(r)}
               />
               <span className="text-gray-800">
                 {r==="consultant"?"Consultant":"Medical Staff"}
@@ -258,24 +297,24 @@ export default function Register() {
         </div>
       </div>
 
-      {/* staff form */}
-      {role==="staff" && (
+      {/* Staff Form */}
+      {role === "staff" && (
         <div className="bg-white shadow-lg rounded-xl w-full max-w-md p-8">
           <h2 className="text-2xl font-bold mb-6">Register as Medical Staff</h2>
           {[
-            ["First Name",       first,     setFirst],
-            ["Last Name",        last,      setLast],
-            ["Email",            email,     setEmail,      "email"],
-            ["Password",         pwd,       setPwd,        "password"],
-            ["Confirm Password", pwd2,      setPwd2,       "password"],
-            ["Consultant’s Email", docEmail, setDocEmail,  "email"],
-          ].map(([lbl,val,setter,type="text"])=>(
+            ["First Name", first, setFirst],
+            ["Last Name",  last,  setLast],
+            ["Email",      email, setEmail,    "email"],
+            ["Password",   pwd,   setPwd,      "password"],
+            ["Confirm Password", pwd2, setPwd2,"password"],
+            ["Consultant's Email", docEmail, setDocEmail, "email"],
+          ].map(([lbl, val, setter, type="text"]) => (
             <div key={lbl} className="mb-4">
               <label className="block text-sm font-medium">{lbl}</label>
               <input
                 type={type}
                 value={val}
-                onChange={e=>setter(e.target.value)}
+                onChange={e => setter(e.target.value)}
                 placeholder={lbl}
                 className="mt-1 w-full rounded-xl border border-[#DA79B9] px-4 py-2"
               />
@@ -290,56 +329,53 @@ export default function Register() {
         </div>
       )}
 
-      {/* consultant form */}
-      {role==="consultant" && (
+      {/* Consultant Form */}
+      {role === "consultant" && (
         <div className="bg-white shadow-lg rounded-xl w-full max-w-5xl overflow-hidden md:flex">
-          {/* left */}
+          {/* Left – Details */}
           <div className="md:w-1/2 p-8 space-y-6">
             <h2 className="text-2xl font-bold text-gray-800">Register as Consultant</h2>
 
-            {/* identity */}
+            {/* Identity */}
             {[
-              ["Email", email, setEmail, "email"],
-              ["Name",  name,  setName],
+              ["Email",     email, setEmail, "email"],
+              ["First Name", consultFirstName, setConsultFirstName],
+              ["Last Name", consultLastName, setConsultLastName],
               ["Specialty", spec, setSpec],
-            ].map(([lbl,val,setter,type="text"])=>(
+            ].map(([lbl, val, setter, type="text"]) => (
               <div key={lbl}>
                 <label className="block text-sm font-medium text-gray-800">{lbl}</label>
                 <input
                   type={type}
                   value={val}
-                  onChange={e=>setter(e.target.value)}
+                  onChange={e => setter(e.target.value)}
                   placeholder={`Enter ${lbl}`}
                   className="mt-1 block w-full rounded-xl border border-[#DA79B9] px-4 py-2"
                 />
               </div>
             ))}
 
-            {/* photo */}
+            {/* Photo */}
             <div>
               <label className="block text-sm font-medium text-gray-800">Profile Photo</label>
               <input type="file" accept="image/*" onChange={onPhoto} className="mt-1 w-full"/>
               {preview && (
-                <img
-                  src={preview}
-                  alt="preview"
-                  className="mt-2 w-24 h-24 object-cover rounded-full border"
-                />
+                <img src={preview} alt="preview" className="mt-2 w-24 h-24 object-cover rounded-full border"/>
               )}
             </div>
 
-            {/* passwords */}
+            {/* Passwords */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                ["Password", pwd,  setPwd],
+                ["Password", pwd, setPwd],
                 ["Confirm Password", pwd2, setPwd2],
-              ].map(([lbl,val,setter])=>(
+              ].map(([lbl, val, setter]) => (
                 <div key={lbl}>
                   <label className="block text-sm font-medium text-gray-800">{lbl}</label>
                   <input
                     type="password"
                     value={val}
-                    onChange={e=>setter(e.target.value)}
+                    onChange={e => setter(e.target.value)}
                     placeholder={lbl}
                     className="mt-1 block w-full rounded-xl border border-[#DA79B9] px-4 py-2"
                   />
@@ -347,12 +383,12 @@ export default function Register() {
               ))}
             </div>
 
-            {/* phone */}
+            {/* Phone */}
             <div>
               <label className="block text-sm font-medium text-gray-800">Phone Number</label>
               <input
                 value={phone}
-                onChange={e=>setPhone(e.target.value)}
+                onChange={e => setPhone(e.target.value)}
                 placeholder="Enter phone"
                 className="mt-1 block w-full rounded-xl border border-[#DA79B9] px-4 py-2"
               />
@@ -361,48 +397,48 @@ export default function Register() {
             <hr className="border-gray-200"/>
             <h3 className="text-lg font-semibold text-gray-800">Consultation Details</h3>
 
-            {/* days */}
+            {/* Days */}
             <label className="block text-sm font-medium text-gray-800">Available Days</label>
             <div className="flex flex-wrap gap-2 mb-4">
-              {DAYS.map(d=>(
+              {DAYS.map(d => (
                 <label key={d} className="flex items-center space-x-2">
                   <input
                     type="checkbox"
                     className="h-5 w-5 text-[#DA79B9]"
                     checked={days.includes(d)}
-                    onChange={()=>toggle(d,days,setDays)}
+                    onChange={() => toggle(d, days, setDays)}
                   />
                   <span className="text-sm">{d}</span>
                 </label>
               ))}
             </div>
 
-            {/* hours */}
+            {/* Hours */}
             <label className="block text-sm font-medium text-gray-800">Consultation Hours</label>
             <div className="flex flex-wrap gap-2 mb-4">
-              {HOURS.map(h=>(
+              {HOURS.map(h => (
                 <label key={h} className="flex items-center space-x-2">
                   <input
                     type="checkbox"
                     className="h-5 w-5 text-[#DA79B9]"
                     checked={hours.includes(h)}
-                    onChange={()=>toggle(h,hours,setHours)}
+                    onChange={() => toggle(h, hours, setHours)}
                   />
                   <span className="text-sm">{h}</span>
                 </label>
               ))}
             </div>
 
-            {/* platform */}
+            {/* Platform */}
             <label className="block text-sm font-medium text-gray-800">Platform</label>
             <div className="flex flex-wrap gap-2 mb-4">
-              {PLATFORMS.map(p=>(
+              {PLATFORMS.map(p => (
                 <label key={p} className="flex items-center space-x-2">
                   <input
                     type="checkbox"
                     className="h-5 w-5 text-[#DA79B9]"
                     checked={plat.includes(p)}
-                    onChange={()=>toggle(p,plat,setPlat)}
+                    onChange={() => toggle(p, plat, setPlat)}
                   />
                   <span className="text-sm">{p}</span>
                 </label>
@@ -417,44 +453,30 @@ export default function Register() {
             </button>
           </div>
 
-          {/* right – map */}
+          {/* Right – Map & Autocomplete */}
           <div className="md:w-1/2 border-t md:border-t-0 md:border-l border-gray-200 p-8">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               Select Birth Center Location
             </h3>
 
-            <div className="relative mb-4">
-              <input
-                type="text"
-                value={search}
-                onChange={onSearch}
-                placeholder="Search for birth center"
-                className="w-full rounded-xl border border-[#DA79B9] px-4 py-2"
-              />
-              {pred.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-md mt-1 max-h-60 overflow-y-auto">
-                  {pred.map(p=>(
-                    <li
-                      key={p.place_id}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={()=>pickPred(p)}
-                    >
-                      {p.description}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            {isLoaded ? (
+              <Autocomplete onLoad={onLoadAuto} onPlaceChanged={onPlaceChanged}>
+                <input
+                  type="text"
+                  placeholder="Search for birth center"
+                  className="w-full mb-4 rounded-xl border border-[#DA79B9] px-4 py-2"
+                />
+              </Autocomplete>
+            ) : (
+              <p>Loading map...</p>
+            )}
 
             {isLoaded && (
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}
                 zoom={12}
-                center={loc || defaultCenter}
-                onClick={e=>{
-                  const l={ lat:e.latLng.lat(), lng:e.latLng.lng() };
-                  setLoc(l); setMarker(l);
-                }}
+                center={centerMap}
+                onClick={handleMapClick}
                 options={{ styles: customMapStyles }}
               >
                 {marker && (
@@ -462,14 +484,11 @@ export default function Register() {
                     <Marker
                       position={marker}
                       draggable
-                      onDragEnd={e=>{
-                        const l={ lat:e.latLng.lat(), lng:e.latLng.lng() };
-                        setLoc(l); setMarker(l);
-                      }}
+                      onDragEnd={handleMapClick}
                     />
                     <InfoWindow
                       position={marker}
-                      onCloseClick={()=>setMarker(null)}
+                      onCloseClick={() => setMarker(null)}
                     >
                       <div>
                         <p className="font-medium">{cName}</p>
@@ -479,6 +498,17 @@ export default function Register() {
                   </>
                 )}
               </GoogleMap>
+            )}
+
+            {cName && (
+              <p className="mt-4 text-sm text-gray-700">
+                <strong>Selected Center:</strong> {cName}
+              </p>
+            )}
+            {cAddr && (
+              <p className="text-sm text-gray-700">
+                <strong>Address:</strong> {cAddr}
+              </p>
             )}
           </div>
         </div>

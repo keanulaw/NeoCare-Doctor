@@ -14,7 +14,10 @@ const sendNotif = async ({ email, name, bookings }) => {
   let message = `Hello, ${name},\n\nYou have pending booking(s) scheduled with NeoCare:\n\n`;
 
   pendingBookings.forEach((booking, index) => {
-    const date = booking.date.toDate().toLocaleDateString();
+    const date = booking.date instanceof Date
+  ? booking.date.toLocaleDateString()
+  : new Date(booking.date).toLocaleDateString();
+
     message += `${index + 1}. ${booking.fullName} on ${date} at ${booking.hour} (${booking.platform})\n`;
   });
 

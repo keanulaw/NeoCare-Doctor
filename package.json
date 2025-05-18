@@ -11,6 +11,7 @@
     "start": "react-scripts start"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@react-google-maps/api": "^2.20.6",
     "@tailwindcss/vite": "^4.0.5",
     "emailjs-com": "^3.2.0",
