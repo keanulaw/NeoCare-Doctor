@@ -9,8 +9,8 @@ import {
   collection,
   query,
   where,
-  getDocs,
   orderBy,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../configs/firebase-config";
 import Header from "../components/Header";
@@ -26,6 +26,8 @@ const ClientDetails = () => {
   const [role, setRole]           = useState(null);
 
   useEffect(() => {
+    let unsubscribeNotes;
+
     const fetchData = async () => {
       try {
         const auth = getAuth();
@@ -35,7 +37,7 @@ const ClientDetails = () => {
           return;
         }
 
-        // 1️⃣ Load the signed-in user’s profile to get role & consultantId
+        // 1️⃣ Load the signed-in user's profile to get role & consultantId
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
 
@@ -69,14 +71,17 @@ const ClientDetails = () => {
         }
         setClient(clientData);
 
-        // 4️⃣ Fetch this client’s notes/history
+        // 4️⃣ Subscribe in real-time to this client's notes
+        //    *only* those authored under your consultantId.
         const notesQuery = query(
           collection(db, "consultationNotes"),
-          where("clientId", "==", id),
-          orderBy("createdAt", "desc")
+          where("clientId",     "==", id),
+          where("consultantId", "==", allowedConsultantId),
+          orderBy("createdAt",  "desc")
         );
-        const snapshot = await getDocs(notesQuery);
-        setNotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        unsubscribeNotes = onSnapshot(notesQuery, snapshot => {
+          setNotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
       } catch (e) {
         console.error("Error loading client details:", e);
         navigate("/clients");
@@ -86,6 +91,11 @@ const ClientDetails = () => {
     };
 
     fetchData();
+
+    // cleanup when unmounting
+    return () => {
+      if (unsubscribeNotes) unsubscribeNotes();
+    };
   }, [id, navigate]);
 
   if (loading) {

@@ -128,6 +128,7 @@ const Requests = () => {
   const accept = async (id) => {
     setBusyId(id);
     try {
+      // Just delegate both status update & client-creation to the server
       const res = await fetch(`${API_BASE}/api/bookings/${id}/accept`, {
         method: "POST",
       });

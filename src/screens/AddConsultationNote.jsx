@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { db, auth } from "../configs/firebase-config";
-import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp, query, where, orderBy, limit, getDocs, updateDoc } from "firebase/firestore";
 
 const AddConsultationNote = () => {
   const { id } = useParams();
@@ -115,6 +115,45 @@ const AddConsultationNote = () => {
   }
   });
 
+  // track a draft note ID when loaded
+  const [draftId, setDraftId] = useState(null);
+
+  // ─── When a doctor picks a type, load the latest staff draft ───
+  useEffect(() => {
+    if (role !== "doctor" || !consultationType) return;
+    (async () => {
+      const q = query(
+        collection(db, "consultationNotes"),
+        where("clientId", "==", id),
+        where("consultationType", "==", consultationType),
+        where("role", "==", "staff"),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return;
+      const docSnap = snap.docs[0];
+      setDraftId(docSnap.id);
+      const staffData = docSnap.data();
+
+      setFormData(prev => ({
+        ...prev,
+        [consultationType]: {
+          ...prev[consultationType],
+          ...(staffData.maternalHealth    && { maternalHealth: staffData.maternalHealth }),
+          ...(staffData.screening         && { screening: staffData.screening }),
+          ...(staffData.fetalHealth       && { fetalHealth: staffData.fetalHealth }),
+          ...(staffData.vitalSigns        && { vitalSigns: staffData.vitalSigns }),
+          ...(staffData.fetalMonitoring   && { fetalMonitoring: staffData.fetalMonitoring }),
+          ...(staffData.labs              && { labs: staffData.labs }),
+          ...(staffData.typeAndScreen     && { typeAndScreen: staffData.typeAndScreen }),
+          ...(staffData.bloodCultures     != null && { bloodCultures: staffData.bloodCultures }),
+          ...(staffData.ultrasoundFindings!= null && { ultrasoundFindings: staffData.ultrasoundFindings })
+        }
+      }));
+    })();
+  }, [role, consultationType, id]);
+
   // generic updater for nested fields
   const handleInputChange = (section, group, field, value) => {
     setFormData(prev => ({
@@ -132,21 +171,40 @@ const AddConsultationNote = () => {
   // ──────────── SAVE handler ────────────
   const handleAddNote = async () => {
     if (!consultationType) return;
-
     setLoading(true);
+
     const user = auth.currentUser;
     try {
-      // security: ensure consultant owns the client
-      const cRef = doc(db, "clients", id);
-      const cSnap = await getDoc(cRef);
-      if (!cSnap.exists() || cSnap.data().consultantId !== user.uid) {
-        throw new Error("Access denied");
-      }
+      // load client & verify
+      const cSnap = await getDoc(doc(db, "clients", id));
+      if (!cSnap.exists()) throw new Error("Client not found");
+      const client = cSnap.data();
+      const doctorId = client.consultantId;
 
-      // build note body, stripping doctor-or-staff fields
+      // verify permissions
+      const uSnap = await getDoc(doc(db, "users", user.uid));
+      const uData = uSnap.data() || {};
+      const isDocAllowed   = role === "doctor" && user.uid === doctorId;
+      const isStaffAllowed = role === "staff" && uData.consultantId === doctorId;
+      if (!isDocAllowed && !isStaffAllowed) throw new Error("Access denied");
+
+      // fetch consultantName & authorName
+      const drSnap = await getDoc(doc(db, "consultants", doctorId));
+      const consultantName = drSnap.exists() ? drSnap.data().name : "Unknown Doctor";
+      let rawAuthorName;
+      if (role === "doctor") {
+        const docSnap = await getDoc(doc(db, "consultants", user.uid));
+        rawAuthorName = docSnap.exists() ? docSnap.data().name : null;
+      } else {
+        const usrSnap = await getDoc(doc(db, "users", user.uid));
+        rawAuthorName = usrSnap.exists() ? usrSnap.data().name : null;
+      }
+      const authorName = rawAuthorName?.trim() || user.displayName || "Unknown";
+
+      // strip or pick only the fields we want
       let body = { ...formData[consultationType] };
       if (role === "staff") {
-        // remove doctor fields
+        // remove assessment/recs
         if (consultationType === "pregnancy") {
           delete body.pregnancyAssessment;
           delete body.pregnancyRecommendations;
@@ -157,49 +215,60 @@ const AddConsultationNote = () => {
           delete body.emergencyAssessment;
           delete body.emergencyRecommendations;
         }
-      } else if (role === "doctor") {
-        // doctor saves only recommendation section
+      } else {
+        // doctor: only keep assessment/recs
         if (consultationType === "pregnancy") {
           body = {
             pregnancyAssessment: body.pregnancyAssessment,
-            pregnancyRecommendations: body.pregnancyRecommendations,
+            pregnancyRecommendations: body.pregnancyRecommendations
           };
         } else if (consultationType === "prenatal") {
           body = {
             prenatalAssessment: body.prenatalAssessment,
-            prenatalRecommendations: body.prenatalRecommendations,
+            prenatalRecommendations: body.prenatalRecommendations
           };
         } else {
           body = {
             emergencyAssessment: body.emergencyAssessment,
-            emergencyRecommendations: body.emergencyRecommendations,
+            emergencyRecommendations: body.emergencyRecommendations
           };
         }
       }
 
-      // consultant display name
-      const profSnap = await getDoc(doc(db, "consultants", user.uid));
-      const consultantName =
-        profSnap.exists() ? profSnap.data().name : user.displayName || "Unknown";
-
       // payload
-      const payload = {
+      const base = {
         clientId: id,
-        consultantId: user.uid,
+        consultantId: doctorId,
         consultantName,
-        role,                      // "doctor" | "staff"
-        consultationType,
-        ...body,
-        createdAt: serverTimestamp(),
+        authorId:   user.uid,
+        authorName,
+        role,
+        consultationType
       };
 
-      await addDoc(collection(db, "consultationNotes"), payload);
+      if (role === "doctor" && draftId) {
+        // finish the draft
+        const noteRef = doc(db, "consultationNotes", draftId);
+        await updateDoc(noteRef, {
+          ...body,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // create a brand new draft
+        await addDoc(collection(db, "consultationNotes"), {
+          ...base,
+          ...body,
+          createdAt: serverTimestamp()
+        });
+      }
+
       navigate(`/clients/${id}`);
     } catch (e) {
       console.error(e);
       alert(e.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // 🧠 Dynamic Title Mapping
